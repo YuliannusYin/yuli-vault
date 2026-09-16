@@ -2,14 +2,14 @@
 # =============================================================================
 # tests/crypto/CMakeLists.txt
 #
-# PwdVault 加密引擎单元测试。链接 PwdVault::Crypto 与 GoogleTest。
+# PwdVault 加密引擎单元测试。链接 YuliVault::Crypto 与 GoogleTest。
 # =============================================================================
 
 add_executable(test_crypto_engine test_crypto_engine.cpp)
 
 target_link_libraries(test_crypto_engine
     PRIVATE
-        PwdVault::Crypto
+        YuliVault::Crypto
         GTest::gtest_main
 )
 

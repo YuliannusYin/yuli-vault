@@ -2,11 +2,11 @@
 // =============================================================================
 // IpcClient.cpp
 //
-// PwdVault UI 进程 IPC 客户端实现。基于 Windows 命名管道：
-//   - connect_to_service: 用 CreateFileW 打开 \\.\pipe\PwdVaultService
+// Yuli Vault UI 进程 IPC 客户端实现。基于 Windows 命名管道：
+//   - connect_to_service: 用 CreateFileW Open \\.\pipe\YuliVaultService
 //   - read_all / write_all: 用 overlapped I/O + WaitForSingleObject 实现 10 秒超时
 //   - 重试: connect 失败时重试 3 次，间隔 500ms（QThread::msleep）
-//   - RAII: ScopedHandle 包装事件句柄；管道句柄在析构/disconnect 中释放
+//   - RAII: ScopedHandle 包装事件句柄；管道句柄在析构/disconnect Medium释放
 //   - 异步: send_request_async 模板用 QtConcurrent::run 在线程池上跑同步
 //     send_request；pipe_mutex_ 串行化所有请求避免管道帧错乱
 // =============================================================================
@@ -28,7 +28,7 @@
 #include <cstring>
 #include <utility>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
@@ -123,9 +123,9 @@ bool IpcClient::connect_to_service(std::string_view pipe_name) {
             wname.c_str(),
             GENERIC_READ | GENERIC_WRITE,
             0,                          // 独占访问
-            nullptr,                    // 默认安全属性
+            nullptr,                    // 默认Security属性
             OPEN_EXISTING,               // 管道必须已由 service 创建
-            FILE_FLAG_OVERLAPPED,        // 启用 overlapped 以支持超时
+            FILE_FLAG_OVERLAPPED,        // Enable overlapped 以支持超时
             nullptr);
 
         if (raw == INVALID_HANDLE_VALUE) {
@@ -204,7 +204,7 @@ bool IpcClient::write_all(const void* data, size_t size) {
             const DWORD wait_result =
                 ::WaitForSingleObject(event.get(), kRequestTimeoutMs);
             if (wait_result != WAIT_OBJECT_0) {
-                // 超时或失败：取消未决 I/O，等待取消完成
+                // 超时或失败：Cancel未决 I/O，等待Cancel完成
                 ::CancelIo(h);
                 DWORD dummy = 0;
                 ::GetOverlappedResult(h, &ov, &dummy, TRUE);
@@ -369,7 +369,7 @@ core::Result<protocol::EstimateStrengthResponse> IpcClient::estimate_strength(co
 }
 
 // ---------------------------------------------------------------------------
-// 生成器历史记录
+// Generator history
 // ---------------------------------------------------------------------------
 
 core::Result<protocol::ListGeneratedRecordsResponse> IpcClient::list_generated_records() {
@@ -402,7 +402,7 @@ core::Result<protocol::SetGeneratorLimitResponse> IpcClient::set_generator_limit
 }
 
 // ---------------------------------------------------------------------------
-// 标签管理
+// Tags管理
 // ---------------------------------------------------------------------------
 
 core::Result<protocol::AddTagResponse> IpcClient::add_tag(const core::Tag& tag) {
@@ -563,7 +563,7 @@ QFuture<core::Result<protocol::EstimateStrengthResponse>> IpcClient::estimate_st
 }
 
 // ---------------------------------------------------------------------------
-// 异步：生成器历史记录
+// 异步：Generator history
 // ---------------------------------------------------------------------------
 
 QFuture<core::Result<protocol::ListGeneratedRecordsResponse>> IpcClient::list_generated_records_async() {
@@ -596,7 +596,7 @@ QFuture<core::Result<protocol::SetGeneratorLimitResponse>> IpcClient::set_genera
 }
 
 // ---------------------------------------------------------------------------
-// 异步：标签管理
+// 异步：Tags管理
 // ---------------------------------------------------------------------------
 
 QFuture<core::Result<protocol::AddTagResponse>> IpcClient::add_tag_async(const core::Tag& tag) {
@@ -654,4 +654,4 @@ QFuture<core::Result<protocol::SetEntryTagsResponse>> IpcClient::set_entry_tags_
         protocol::CommandId::SetEntryTags, req);
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

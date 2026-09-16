@@ -2,26 +2,28 @@
 // =============================================================================
 // Theme.cpp
 //
-// PwdVault 主题管理器实现。从 Qt 资源 :/dark.qss 或 :/light.qss 加载样式表，
+// Yuli Vault Theme管理器实现。从 Qt 资源 :/dark.qss 或 :/light.qss 加载样式表，
 // 应用到 QApplication。用户偏好持久化到 QSettings。
 // =============================================================================
 #include "Theme.h"
+#include "AppSettings.h"
 
 #include <QApplication>
 #include <QFile>
-#include <QSettings>
 #include <QString>
+#include <QStringConverter>
 #include <QTextStream>
+#include <QVariant>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
-/// QSettings 中存储主题 / 高对比度开关的键名。
+/// QSettings MediumStorageTheme / 高对比度开关的键名。
 constexpr const char* kSettingsKey = "ui/theme";
 constexpr const char* kHcSettingsKey = "ui/high_contrast";
 
-/// 主题对应的基础 qss 资源路径（不含 HC 增强）。
+/// Theme对应的基础 qss 资源路径（不含 HC 增Strong）。
 QString qss_resource_for_mode(Theme::Mode mode) {
     switch (mode) {
         case Theme::Mode::Light: return QStringLiteral(":/light.qss");
@@ -31,8 +33,8 @@ QString qss_resource_for_mode(Theme::Mode mode) {
     }
 }
 
-/// 高对比度增强片段资源路径。深色模式用亮蓝边框（#3b6bff），
-/// 浅色模式用纯黑边框（#000000），仅覆盖中性装饰边框，语义色边框保留原色。
+/// 高对比度增Strong片段资源路径。Dark模式用亮蓝边框（#3b6bff），
+/// Light模式用纯黑边框（#000000），仅覆盖Medium性装饰边框，语义色边框保留原色。
 QString hc_enhance_resource_for_mode(Theme::Mode mode) {
     return (mode == Theme::Mode::Light)
         ? QStringLiteral(":/hc_light_enhance.qss")
@@ -114,7 +116,7 @@ void Theme::set_high_contrast(bool enabled) {
 void Theme::apply_mode(Mode mode) {
     auto* app = qobject_cast<QApplication*>(parent());
     if (!app) return;
-    // 基础 qss + 高对比度增强片段（HC 开启时追加，覆盖中性边框颜色）。
+    // 基础 qss + 高对比度增Strong片段（HC 开启时追加，覆盖Medium性边框颜色）。
     QString qss = load_qss(qss_resource_for_mode(mode));
     if (high_contrast_) {
         qss += QStringLiteral("\n") + load_qss(hc_enhance_resource_for_mode(mode));
@@ -123,13 +125,11 @@ void Theme::apply_mode(Mode mode) {
 }
 
 void Theme::persist(Mode mode) {
-    QSettings settings;
-    settings.setValue(QString::fromLatin1(kSettingsKey), static_cast<int>(mode));
+    settings_set(QString::fromLatin1(kSettingsKey), static_cast<int>(mode));
 }
 
 Theme::Mode Theme::load_persisted() const {
-    QSettings settings;
-    const QVariant v = settings.value(QString::fromLatin1(kSettingsKey));
+    const QVariant v = settings_value(QString::fromLatin1(kSettingsKey));
     if (!v.isValid()) return Mode::Dark;
     bool ok = false;
     const int iv = v.toInt(&ok);
@@ -143,13 +143,11 @@ Theme::Mode Theme::load_persisted() const {
 }
 
 void Theme::persist_hc(bool enabled) {
-    QSettings settings;
-    settings.setValue(QString::fromLatin1(kHcSettingsKey), enabled);
+    settings_set(QString::fromLatin1(kHcSettingsKey), enabled);
 }
 
 bool Theme::load_persisted_hc() const {
-    QSettings settings;
-    return settings.value(QString::fromLatin1(kHcSettingsKey), false).toBool();
+    return settings_value(QString::fromLatin1(kHcSettingsKey), false).toBool();
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

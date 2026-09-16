@@ -2,8 +2,8 @@
 # =============================================================================
 # CompilerWarnings.cmake
 #
-# 定义项目通用警告级别，提供一个 INTERFACE 目标 PwdVault::Warnings，
-# 各模块通过 target_link_libraries(<target> PRIVATE PwdVault::Warnings) 引入。
+# 定义项目通用警告级别，提供一个 INTERFACE 目标 YuliVault::Warnings，
+# 各模块通过 target_link_libraries(<target> PRIVATE YuliVault::Warnings) 引入。
 #
 # 风格说明：
 #   - GCC/Clang: -Wall -Wextra -Wpedantic，并禁用少量噪音警告
@@ -11,10 +11,10 @@
 # =============================================================================
 
 # 创建 INTERFACE 库作为警告选项的载体（modern CMake 风格）
-add_library(pwdvault_warnings INTERFACE)
-add_library(PwdVault::Warnings ALIAS pwdvault_warnings)
+add_library(yuli_vault_warnings INTERFACE)
+add_library(YuliVault::Warnings ALIAS yuli_vault_warnings)
 
-target_compile_features(pwdvault_warnings INTERFACE cxx_std_17)
+target_compile_features(yuli_vault_warnings INTERFACE cxx_std_17)
 
 # -----------------------------------------------------------------------------
 # GCC / Clang 警告配置
@@ -69,17 +69,17 @@ set(_msvc_disabled
 
 # 选择性应用
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
-    target_compile_options(pwdvault_warnings INTERFACE ${_msvc_warnings} ${_msvc_disabled})
+    target_compile_options(yuli_vault_warnings INTERFACE ${_msvc_warnings} ${_msvc_disabled})
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
        OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    target_compile_options(pwdvault_warnings INTERFACE ${_gcc_clang_warnings} ${_gcc_clang_disabled})
+    target_compile_options(yuli_vault_warnings INTERFACE ${_gcc_clang_warnings} ${_gcc_clang_disabled})
 else()
     message(STATUS "CompilerWarnings: 未识别的编译器 '${CMAKE_CXX_COMPILER_ID}'，跳过警告配置")
 endif()
 
-# 提供便利函数：将警告应用到目标（旧式 API，等价于 link PwdVault::Warnings）
-function(pwdvault_enable_warnings target)
-    if(TARGET PwdVault::Warnings)
-        target_link_libraries(${target} PRIVATE PwdVault::Warnings)
+# 提供便利函数：将警告应用到目标（旧式 API，等价于 link YuliVault::Warnings）
+function(yuli_vault_enable_warnings target)
+    if(TARGET YuliVault::Warnings)
+        target_link_libraries(${target} PRIVATE YuliVault::Warnings)
     endif()
 endfunction()

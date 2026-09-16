@@ -1,15 +1,23 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "name": "pwdvault",
-  "version-string": "3.4.0",
-  "description": "PwdVault - 模仿火绒安全软件架构的 C++ + Qt 6 密码管理器",
+  "name": "yuli-vault",
+  "version-string": "4.0.0",
+  "description": "Yuli Vault - local encrypted e-vault (C++20 + Qt 6)",
   "builtin-baseline": "a51bb4d1434e6d0927ff79db8033bed8522b85df",
   "dependencies": [
     "openssl",
     "libsodium",
     "sqlite3",
     "gtest",
-    "qtbase",
-    "qtsvg"
+    {
+      "name": "qtbase",
+      "features": ["windeployqt"]
+    },
+    "qtsvg",
+    {
+      "name": "qttools",
+      "default-features": false,
+      "features": ["linguist"]
+    }
   ]
 }

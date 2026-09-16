@@ -2,16 +2,16 @@
 // =============================================================================
 // IpcClient.h
 //
-// PwdVault UI 进程的命名管道 IPC 客户端。封装与 service 进程之间的同步
+// Yuli Vault UI 进程的命名管道 IPC 客户端。封装与 service 进程之间的同步
 // 与异步请求/响应通信。UI 各视图通过此类调用 service 提供的命令。
 //
 // 设计要点：
 //   - 同步阻塞调用：每个 IPC 命令在调用线程上同步执行，简化实现。
-//     长时间运行的命令会阻塞 UI；UI 应优先使用 _async 重载。
+//     长Time运行的命令会阻塞 UI；UI 应优先使用 _async 重载。
 //   - 异步调用：每个同步方法均有对应的 _async 重载，返回
 //     QFuture<core::Result<Resp>>，内部用 QtConcurrent::run 在线程池上
 //     执行同步 send_request，调用方用 QFutureWatcher 在主线程接收结果。
-//   - 线程安全：所有 send_request 调用由 pipe_mutex_ 串行化，多个并发
+//   - 线程Security：所有 send_request 调用由 pipe_mutex_ 串行化，多个并发
 //     async 请求会排队执行，不会竞争同一管道句柄。
 //   - 重试：connect_to_service 在失败时重试 3 次，间隔 500ms。
 //   - 超时：每个请求最多等待 10 秒，超时返回 IpcError。
@@ -41,17 +41,17 @@
 #include "Serializer.h"
 #include "Types.h"
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 /// 命名管道 IPC 客户端。
 ///
 /// 简化实现：所有调用同步阻塞，每个请求最多等待 10 秒。
-/// 调用方应在 UI 线程上调用；如需后台调用，可包装在 QtConcurrent 中。
+/// 调用方应在 UI 线程上调用；如需后台调用，可包装在 QtConcurrent Medium。
 class IpcClient : public QObject {
     Q_OBJECT
 public:
-    /// service 命名管道的默认路径：\\\\.\\pipe\\PwdVaultService
-    static constexpr const char* kDefaultPipeName = "\\\\.\\pipe\\PwdVaultService";
+    /// Default service pipe: \\\\.\\pipe\\YuliVaultService
+    static constexpr const char* kDefaultPipeName = "\\\\.\\pipe\\YuliVaultService";
 
     explicit IpcClient(QObject* parent = nullptr);
     ~IpcClient() override;
@@ -67,8 +67,8 @@ public:
     // -----------------------------------------------------------------------
 
     /// 连接到 service 命名管道。失败时重试 3 次，每次间隔 500ms。
-    /// \param pipe_name 管道路径，默认为 \\\\.\pipe\PwdVaultService
-    /// \return 连接成功返回 true
+    /// \param pipe_name 管道路径，默认为 \\\\.\pipe\YuliVaultService
+    /// \return 连接Success返回 true
     bool connect_to_service(std::string_view pipe_name = kDefaultPipeName);
 
     /// 主动断开连接。释放管道句柄并复位状态。
@@ -97,7 +97,7 @@ public:
     core::Result<protocol::GeneratePasswordResponse> generate_password(const core::PasswordGeneratorOptions& options);
     core::Result<protocol::EstimateStrengthResponse> estimate_strength(const std::string& password);
 
-    // 标签管理
+    // Tags管理
     core::Result<protocol::AddTagResponse> add_tag(const core::Tag& tag);
     core::Result<protocol::UpdateTagResponse> update_tag(const core::Tag& tag);
     core::Result<protocol::RemoveTagResponse> remove_tag(int64_t id);
@@ -107,7 +107,7 @@ public:
     core::Result<protocol::GetEntryTagsResponse> get_entry_tags(int64_t entry_id);
     core::Result<protocol::SetEntryTagsResponse> set_entry_tags(int64_t entry_id, const std::vector<int64_t>& tag_ids);
 
-    // 生成器历史记录
+    // Generator history
     core::Result<protocol::ListGeneratedRecordsResponse> list_generated_records();
     core::Result<protocol::RemoveGeneratedRecordResponse> remove_generated_record(int64_t id);
     core::Result<protocol::ClearGeneratedRecordsResponse> clear_generated_records();
@@ -141,7 +141,7 @@ public:
     QFuture<core::Result<protocol::GeneratePasswordResponse>> generate_password_async(const core::PasswordGeneratorOptions& options);
     QFuture<core::Result<protocol::EstimateStrengthResponse>> estimate_strength_async(const std::string& password);
 
-    // 标签管理（异步）
+    // Tags管理（异步）
     QFuture<core::Result<protocol::AddTagResponse>> add_tag_async(const core::Tag& tag);
     QFuture<core::Result<protocol::UpdateTagResponse>> update_tag_async(const core::Tag& tag);
     QFuture<core::Result<protocol::RemoveTagResponse>> remove_tag_async(int64_t id);
@@ -151,7 +151,7 @@ public:
     QFuture<core::Result<protocol::GetEntryTagsResponse>> get_entry_tags_async(int64_t entry_id);
     QFuture<core::Result<protocol::SetEntryTagsResponse>> set_entry_tags_async(int64_t entry_id, const std::vector<int64_t>& tag_ids);
 
-    // 生成器历史记录（异步）
+    // Generator history（异步）
     QFuture<core::Result<protocol::ListGeneratedRecordsResponse>> list_generated_records_async();
     QFuture<core::Result<protocol::RemoveGeneratedRecordResponse>> remove_generated_record_async(int64_t id);
     QFuture<core::Result<protocol::ClearGeneratedRecordsResponse>> clear_generated_records_async();
@@ -159,10 +159,10 @@ public:
     QFuture<core::Result<protocol::SetGeneratorLimitResponse>> set_generator_limit_async(int32_t limit);
 
 signals:
-    /// 与 service 的连接断开时触发（仅在已连接→断开时触发一次）。
+    /// 与 service 的Disconnected时触发（仅在已连接→断开时触发一次）。
     void disconnected();
 
-    /// 内部发生错误时触发，\p message 为人类可读描述（中文）。
+    /// 内部发生错误时触发，\p message 为人类可读描述（Medium文）。
     void error_occurred(const QString& message);
 
 private:
@@ -177,7 +177,7 @@ private:
     template <typename Req, typename Resp>
     QFuture<core::Result<Resp>> send_request_async(protocol::CommandId cmd, const Req& req);
 
-    /// 内部断连处理：关闭句柄、复位状态、触发 error_occurred + disconnected 信号。
+    /// 内部断连处理：Close句柄、复位状态、触发 error_occurred + disconnected 信号。
     void handle_disconnect(const std::string& reason);
 
     /// 同步写入全部字节（带 10 秒超时）。
@@ -187,7 +187,7 @@ private:
     bool read_all(void* out, size_t size);
 
     /// 管道句柄。使用 void* 避免在头里暴露 Windows HANDLE 类型；
-    /// 在 .cpp 中通过 static_cast<HANDLE> 转换。nullptr 表示未连接。
+    /// 在 .cpp Medium通过 static_cast<HANDLE> 转换。nullptr 表示未连接。
     void* pipe_handle_ = nullptr;
 
     /// 当前连接状态。
@@ -204,19 +204,19 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// 模板方法实现（必须在头文件中可见以便实例化）
+// 模板方法实现（必须在头文件Medium可见以便实例化）
 // ---------------------------------------------------------------------------
 
 template <typename Req, typename Resp>
 core::Result<Resp> IpcClient::send_request(protocol::CommandId cmd, const Req& req) {
     // 串行化所有请求：sync 调用（UI 线程）与 async 调用（QtConcurrent 线程池）
     // 共用同一 pipe_handle_，必须互斥避免帧错乱。QMutex 默认非递归，本函数
-    // 不会重入自身，安全。
+    // 不会重入自身，Security。
     QMutexLocker locker(&pipe_mutex_);
 
     if (!connected_) {
         return core::Result<Resp>::Err(
-            core::Error(core::ErrorCode::IpcError, "未连接到 service"));
+            core::Error(core::ErrorCode::IpcError, "Not connected to the service"));
     }
 
     core::ByteVec payload = protocol::serialize(req);
@@ -289,4 +289,4 @@ QFuture<core::Result<Resp>> IpcClient::send_request_async(protocol::CommandId cm
     });
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

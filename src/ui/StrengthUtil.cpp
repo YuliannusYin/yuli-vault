@@ -2,7 +2,7 @@
 // =============================================================================
 // StrengthUtil.cpp
 //
-// 密码强度等级 → UI 展示属性实现。所有阈值/文案/颜色在此一处定义，
+// PasswordStrong度等级 → UI 展示属性实现。所有阈值/文案/颜色在此一处定义，
 // 5 处 view（ProgramPasswordDialog / PasswordBookView / GeneratorView /
 // InputView / EditEntryDialog）共享。
 // =============================================================================
@@ -10,17 +10,17 @@
 
 #include <QCoreApplication>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 QString strength_text(core::StrengthLevel level) {
     switch (level) {
-        case core::StrengthLevel::VeryWeak:   return QCoreApplication::translate("StrengthUtil", "很差");
-        case core::StrengthLevel::Weak:       return QCoreApplication::translate("StrengthUtil", "弱");
-        case core::StrengthLevel::Medium:     return QCoreApplication::translate("StrengthUtil", "中");
-        case core::StrengthLevel::Strong:     return QCoreApplication::translate("StrengthUtil", "强");
-        case core::StrengthLevel::VeryStrong:  return QCoreApplication::translate("StrengthUtil", "很强");
+        case core::StrengthLevel::VeryWeak:   return QCoreApplication::translate("StrengthUtil", "Very weak");
+        case core::StrengthLevel::Weak:       return QCoreApplication::translate("StrengthUtil", "Weak");
+        case core::StrengthLevel::Medium:     return QCoreApplication::translate("StrengthUtil", "Medium");
+        case core::StrengthLevel::Strong:     return QCoreApplication::translate("StrengthUtil", "Strong");
+        case core::StrengthLevel::VeryStrong:  return QCoreApplication::translate("StrengthUtil", "Very strong");
     }
-    return QCoreApplication::translate("StrengthUtil", "弱");
+    return QCoreApplication::translate("StrengthUtil", "Weak");
 }
 
 QString strength_qss_key(core::StrengthLevel level) {
@@ -35,7 +35,7 @@ QString strength_qss_key(core::StrengthLevel level) {
 }
 
 QString strength_color(core::StrengthLevel level) {
-    // 与 badge 颜色谱对齐：红 / 黄 / 蓝 / 浅绿 / 深绿（light 主题色值）
+    // 与 badge 颜色谱对齐：红 / 黄 / 蓝 / 浅绿 / 深绿（light Theme色值）
     switch (level) {
         case core::StrengthLevel::VeryWeak:   return QStringLiteral("#dc2626");  // 红
         case core::StrengthLevel::Weak:       return QStringLiteral("#c9820a");  // 黄
@@ -71,8 +71,30 @@ QString strength_badge_class(core::StrengthLevel level) {
 }
 
 int strength_segments(core::StrengthLevel level) {
-    // 与 level 枚举数值一致（0..4）
     return static_cast<int>(level);
 }
 
-}  // namespace pwdvault::ui
+QString translate_strength_warning(const QString& key) {
+    if (key.startsWith(QStringLiteral("repeat:"))) {
+        return QCoreApplication::translate(
+            "StrengthUtil", "Repeated character run of length %1")
+            .arg(key.section(QLatin1Char(':'), 1));
+    }
+    if (key == QStringLiteral("uneven")) {
+        return QCoreApplication::translate(
+            "StrengthUtil", "Character classes are unevenly mixed");
+    }
+    if (key.startsWith(QStringLiteral("sequential:"))) {
+        return QCoreApplication::translate(
+            "StrengthUtil", "Sequential characters of length %1")
+            .arg(key.section(QLatin1Char(':'), 1));
+    }
+    if (key.startsWith(QStringLiteral("keyboard:"))) {
+        return QCoreApplication::translate(
+            "StrengthUtil", "Keyboard walk of length %1")
+            .arg(key.section(QLatin1Char(':'), 1));
+    }
+    return key;
+}
+
+}  // namespace yuli::vault::ui

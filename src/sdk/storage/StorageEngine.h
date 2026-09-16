@@ -2,52 +2,15 @@
 // =============================================================================
 // StorageEngine.h
 //
-// PwdVault 存储引擎的 SQLite 持久化实现。
+// Yuli Vault SQLite storage engine.
 //
-// 设计要点：
-//   - 通过 `IStorageEngine` 抽象接口被服务进程调用，本类为生产实现。
-//   - 使用 SQLite3 prepared statement + 参数绑定，杜绝 SQL 注入。
-//   - RAII 管理 sqlite3 连接与 sqlite3_stmt 句柄：异常/作用域退出时自动释放。
-//   - 线程安全：每个实例持有一个 std::mutex，串行化所有公开方法。
-//   - PasswordEntry 中的 password / iv / tag 字段视为已加密的二进制数据，
-//     本引擎只负责 BLOB 存取，不做任何加解密。
+// Schema v3 (settings.schema_version = 3):
+//   vault_items (id, type, title, payload, iv, tag, created_at, updated_at)
+//   tags / entry_tags (FK → vault_items) / generated_passwords / settings
 //
-// Schema（init 时创建，schema_version=2，会清空重建旧表）：
-//   CREATE TABLE IF NOT EXISTS passwords (
-//       id          INTEGER PRIMARY KEY AUTOINCREMENT,
-//       entry_name  TEXT NOT NULL,
-//       account     TEXT NOT NULL,
-//       username    TEXT,
-//       password    BLOB NOT NULL,
-//       website     TEXT,
-//       note        TEXT,
-//       iv          BLOB NOT NULL,
-//       tag         BLOB NOT NULL,
-//       created_at  INTEGER NOT NULL,
-//       updated_at  INTEGER NOT NULL
-//   );
-//   CREATE INDEX IF NOT EXISTS idx_passwords_entry_name ON passwords(entry_name);
-//   CREATE INDEX IF NOT EXISTS idx_passwords_account    ON passwords(account);
-//
-//   CREATE TABLE IF NOT EXISTS tags (
-//       id          INTEGER PRIMARY KEY AUTOINCREMENT,
-//       name        TEXT NOT NULL UNIQUE,
-//       color       TEXT,
-//       created_at  INTEGER NOT NULL,
-//       updated_at  INTEGER NOT NULL
-//   );
-//   CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
-//
-//   CREATE TABLE IF NOT EXISTS entry_tags (
-//       entry_id    INTEGER NOT NULL,
-//       tag_id      INTEGER NOT NULL,
-//       PRIMARY KEY (entry_id, tag_id),
-//       FOREIGN KEY (entry_id) REFERENCES passwords(id) ON DELETE CASCADE,
-//       FOREIGN KEY (tag_id)   REFERENCES tags(id)       ON DELETE CASCADE
-//   );
-//   CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
-//
-//   settings 表中写入 schema_version='2'。
+// A copied PwdVault v2 database keeps the `passwords` table until
+// migrate_v2_to_v3() rewrites rows in a single transaction. That path never
+// DROP-rebuilds user data. Payload blobs are opaque; ServiceCore encrypts.
 // =============================================================================
 #pragma once
 
@@ -61,7 +24,7 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-namespace pwdvault::storage {
+namespace yuli::vault::storage {
 
 /// SQLite 持久化存储引擎。
 class StorageEngine : public core::IStorageEngine {
@@ -85,6 +48,9 @@ public:
     core::Result<std::vector<core::PasswordEntry>> search_entries(
         const core::SearchQuery& query) override;
     core::Result<std::vector<core::PasswordEntry>> list_entries() override;
+    int schema_version() override;
+    core::Error migrate_v2_to_v3(
+        const std::function<core::Result<core::VaultItem>(core::VaultItem)>& rewrap) override;
 
     core::Error begin_transaction() override;
     core::Error commit_transaction() override;
@@ -126,6 +92,7 @@ private:
 
     DbHandle db_;
     std::mutex mutex_;
+    int schema_version_ = 0;
 
     /// 执行一条无参数 SQL（如 BEGIN/COMMIT/CREATE TABLE）。
     core::Error exec_sql(const char* sql);
@@ -133,9 +100,17 @@ private:
     /// 初始化 schema（建表 + 建索引 + 写入 schema_version）。
     core::Error init_schema();
 
+    core::Error create_v3_item_tables();
+    core::Error write_schema_version(int version);
+    core::ByteVec payload_for_store(const core::VaultItem& entry) const;
+
+    /// v3 vault_items row: id, type, title, payload, iv, tag, created_at, updated_at
+    static core::PasswordEntry read_v3_row(sqlite3_stmt* stmt);
+    /// v2 passwords row: id, entry_name, account, username, password, website, note, iv, tag, created, updated
+    static core::PasswordEntry read_v2_row(sqlite3_stmt* stmt);
+
     /// 从当前 step 后的结果行读取一条 PasswordEntry（不含 tags）。
-    /// 调用方需保证 stmt 已 step 到 SQLITE_ROW。
-    static core::PasswordEntry read_row(sqlite3_stmt* stmt);
+    core::PasswordEntry read_row(sqlite3_stmt* stmt) const;
 
     /// 从当前 step 后的结果行读取一条 Tag。
     static core::Tag read_tag_row(sqlite3_stmt* stmt);
@@ -160,4 +135,4 @@ private:
     void fill_entry_tags_unlocked(core::PasswordEntry& entry);
 };
 
-}  // namespace pwdvault::storage
+}  // namespace yuli::vault::storage

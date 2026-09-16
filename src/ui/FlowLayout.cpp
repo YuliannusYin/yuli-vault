@@ -8,7 +8,7 @@
 
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 FlowLayout::FlowLayout(QWidget* parent, int margin, int hSpacing, int vSpacing)
     : QLayout(parent), h_space_(hSpacing), v_space_(vSpacing) {
@@ -120,4 +120,4 @@ int FlowLayout::doLayout(const QRect& rect, bool testOnly) const {
     return y + lineHeight - top + m.bottom();
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

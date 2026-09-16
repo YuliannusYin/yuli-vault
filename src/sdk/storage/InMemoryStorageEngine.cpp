@@ -15,7 +15,9 @@
 #include <string>
 #include <utility>
 
-namespace pwdvault::storage {
+#include "VaultPayload.h"
+
+namespace yuli::vault::storage {
 
 namespace {
 
@@ -148,24 +150,6 @@ core::Result<std::vector<core::PasswordEntry>>
 InMemoryStorageEngine::search_entries(const core::SearchQuery& query) {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    // 字段白名单：password 是密文，不参与搜索。
-    auto is_searchable_field = [](const std::string& f) {
-        return f == "entry_name" || f == "account" || f == "username" ||
-               f == "website" || f == "note";
-    };
-    std::vector<std::string> fields;
-    if (query.fields.empty()) {
-        fields = {"entry_name", "account", "username", "website", "note"};
-    } else {
-        for (const auto& f : query.fields) {
-            if (is_searchable_field(f)) {
-                fields.push_back(f);
-            }
-        }
-    }
-
-    // 预构建 entry_id → 是否匹配 tag 过滤的索引
-    // tag_ids 为空时不按标签过滤
     auto entry_matches_tags = [this](int64_t entry_id,
                                       const std::vector<int64_t>& tag_ids) {
         if (tag_ids.empty()) return true;
@@ -183,35 +167,8 @@ InMemoryStorageEngine::search_entries(const core::SearchQuery& query) {
 
     std::vector<core::PasswordEntry> results;
     for (const auto& e : entries_) {
-        // 文本匹配（OR 语义：任一字段命中即纳入）
-        bool text_matched = false;
-        if (query.text.empty()) {
-            text_matched = true;
-        } else {
-            for (const auto& f : fields) {
-                std::string value;
-                if (f == "entry_name") {
-                    value = e.entry_name;
-                } else if (f == "account") {
-                    value = e.account;
-                } else if (f == "username") {
-                    value = e.username;
-                } else if (f == "website") {
-                    value = e.website;
-                } else if (f == "note") {
-                    value = e.note;
-                }
-                if (contains_substring(value, query.text, query.case_sensitive)) {
-                    text_matched = true;
-                    break;
-                }
-            }
-        }
-        if (!text_matched) continue;
-
-        // 标签过滤
+        if (!core::item_matches_text_query(e, query)) continue;
         if (!entry_matches_tags(e.id, query.tag_ids)) continue;
-
         results.push_back(e);
     }
 
@@ -573,4 +530,4 @@ core::Error InMemoryStorageEngine::set_entry_tags(int64_t entry_id,
     return set_entry_tags_unlocked(entry_id, tag_ids);
 }
 
-}  // namespace pwdvault::storage
+}  // namespace yuli::vault::storage

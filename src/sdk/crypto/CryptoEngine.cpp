@@ -25,7 +25,7 @@
 #include <utility>
 #include <vector>
 
-namespace pwdvault::crypto {
+namespace yuli::vault::crypto {
 
 namespace {
 
@@ -372,4 +372,4 @@ bool CryptoEngine::verify_password(const std::string& password,
     return match == 0;
 }
 
-}  // namespace pwdvault::crypto
+}  // namespace yuli::vault::crypto

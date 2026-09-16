@@ -2,43 +2,43 @@
 // =============================================================================
 // ErrorMessages.cpp
 //
-// core::Error → 中文友好文案 实现。技术细节进 qDebug 日志。
+// core::Error → Medium文友好文案 实现。技术细节进 qDebug 日志。
 // =============================================================================
 #include "ErrorMessages.h"
 
 #include <QDebug>
 #include <QCoreApplication>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 QString friendly_message(const core::Error& error) {
     // 技术细节进日志，便于排障但不污染 UI
     const std::string what = error.what();
     if (!what.empty()) {
-        qDebug() << "[PwdVault][Error]" << QString::fromStdString(what);
+        qDebug() << "[Yuli Vault][Error]" << QString::fromStdString(what);
     }
 
     switch (error.code) {
         case core::ErrorCode::None:
-            return QCoreApplication::translate("ErrorMessages", "成功");
+            return QCoreApplication::translate("ErrorMessages", "Success");
         case core::ErrorCode::InvalidArgument:
-            return QCoreApplication::translate("ErrorMessages", "输入无效，请检查字段内容");
+            return QCoreApplication::translate("ErrorMessages", "Invalid input. Check the fields.");
         case core::ErrorCode::NotFound:
-            return QCoreApplication::translate("ErrorMessages", "条目不存在，可能已被删除");
+            return QCoreApplication::translate("ErrorMessages", "Item not found. It may have been deleted.");
         case core::ErrorCode::AlreadyExists:
-            return QCoreApplication::translate("ErrorMessages", "条目名已存在，请使用其他名称");
+            return QCoreApplication::translate("ErrorMessages", "That name is already in use.");
         case core::ErrorCode::Unauthorized:
-            return QCoreApplication::translate("ErrorMessages", "密码错误或未授权");
+            return QCoreApplication::translate("ErrorMessages", "Wrong password or not authorized");
         case core::ErrorCode::CryptoError:
-            return QCoreApplication::translate("ErrorMessages", "加解密失败，数据可能已损坏");
+            return QCoreApplication::translate("ErrorMessages", "Encryption failed. Data may be damaged.");
         case core::ErrorCode::StorageError:
-            return QCoreApplication::translate("ErrorMessages", "本地存储读写失败，请重试");
+            return QCoreApplication::translate("ErrorMessages", "Local storage failed. Try again.");
         case core::ErrorCode::IpcError:
-            return QCoreApplication::translate("ErrorMessages", "与 service 通信失败，请重试");
+            return QCoreApplication::translate("ErrorMessages", "Could not talk to the service. Try again.");
         case core::ErrorCode::InternalError:
-            return QCoreApplication::translate("ErrorMessages", "内部错误，请重试");
+            return QCoreApplication::translate("ErrorMessages", "Internal error. Try again.");
     }
-    return QCoreApplication::translate("ErrorMessages", "未知错误");
+    return QCoreApplication::translate("ErrorMessages", "Unknown error");
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

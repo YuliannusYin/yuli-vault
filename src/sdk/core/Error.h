@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 
 /// 错误类别枚举。
 enum class ErrorCode {
@@ -71,4 +71,4 @@ public:
     std::string message;                 ///< 人类可读错误消息
 };
 
-}  // namespace pwdvault::core
+}  // namespace yuli::vault::core

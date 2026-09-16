@@ -13,7 +13,7 @@
 #include <cstring>
 #include <utility>
 
-namespace pwdvault::protocol {
+namespace yuli::vault::protocol {
 
 // ---------------------------------------------------------------------------
 // 内部辅助：Writer / Reader 与变长字段的读写函数
@@ -27,6 +27,7 @@ public:
         const auto* p = static_cast<const std::byte*>(data);
         buffer_.insert(buffer_.end(), p, p + size);
     }
+    void write_u8(uint8_t v) { write_bytes(&v, sizeof(v)); }
     void write_u16(uint16_t v) { write_bytes(&v, sizeof(v)); }
     void write_u32(uint32_t v) { write_bytes(&v, sizeof(v)); }
     void write_u64(uint64_t v) { write_bytes(&v, sizeof(v)); }
@@ -65,6 +66,7 @@ public:
         pos_ += size;
         return true;
     }
+    bool read_u8(uint8_t& out) { return read_bytes(&out, sizeof(out)); }
     bool read_u16(uint16_t& out) { return read_bytes(&out, sizeof(out)); }
     bool read_u32(uint32_t& out) { return read_bytes(&out, sizeof(out)); }
     bool read_u64(uint64_t& out) { return read_bytes(&out, sizeof(out)); }
@@ -147,13 +149,13 @@ bool read_tag_vector(Reader& r, std::vector<core::Tag>& out) {
     return true;
 }
 
-/// 写入 PasswordEntry（v2 schema）：
-///   id(i64) + entry_name(string) + account(string) + username(string) +
-///   password(string) + website(string) + note(string) + tags(vec<Tag>) +
-///   created_at(i64) + updated_at(i64) + iv(byte_vec) + tag(byte_vec)。
+/// VaultItem / PasswordEntry (protocol v2):
+///   id(i64) + type(u8) + title(string) + account + username + password +
+///   website + note + tags + created_at + updated_at + iv + tag.
 void write_password_entry(Writer& w, const core::PasswordEntry& e) {
     w.write_i64(e.id);
-    w.write_string(e.entry_name);
+    w.write_u8(static_cast<uint8_t>(e.type));
+    w.write_string(e.title);
     w.write_string(e.account);
     w.write_string(e.username);
     w.write_string(e.password);
@@ -168,7 +170,10 @@ void write_password_entry(Writer& w, const core::PasswordEntry& e) {
 
 bool read_password_entry(Reader& r, core::PasswordEntry& out) {
     if (!r.read_i64(out.id)) return false;
-    if (!r.read_string(out.entry_name)) return false;
+    uint8_t type_raw = 0;
+    if (!r.read_u8(type_raw)) return false;
+    out.type = static_cast<core::VaultItemType>(type_raw);
+    if (!r.read_string(out.title)) return false;
     if (!r.read_string(out.account)) return false;
     if (!r.read_string(out.username)) return false;
     if (!r.read_string(out.password)) return false;
@@ -1235,4 +1240,4 @@ core::Result<std::pair<MessageHeader, size_t>> parse_header(core::ByteSpan data)
         std::make_pair(h, sizeof(MessageHeader)));
 }
 
-}  // namespace pwdvault::protocol
+}  // namespace yuli::vault::protocol

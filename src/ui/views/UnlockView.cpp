@@ -2,7 +2,7 @@
 // =============================================================================
 // UnlockView.cpp
 //
-// PwdVault 解锁视图实现（新设计）。380px 居中卡片 + 盾牌图标 + 可见性切换。
+// Yuli Vault Unlock视图实现（新设计）。380px 居Medium卡片 + 盾牌图标 + 可见性切换。
 // =============================================================================
 #include "UnlockView.h"
 #include "ErrorMessages.h"
@@ -24,7 +24,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 UnlockView::UnlockView(IpcClient* client, QWidget* parent)
     : QWidget(parent), client_(client)
@@ -33,7 +33,7 @@ UnlockView::UnlockView(IpcClient* client, QWidget* parent)
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     setAttribute(Qt::WA_TranslucentBackground);
-    setWindowTitle(tr("PwdVault - 解锁"));
+    setWindowTitle(tr("Yuli Vault — Unlock"));
 
     // 自动覆盖父窗口大小
     if (parent) {
@@ -46,7 +46,7 @@ UnlockView::UnlockView(IpcClient* client, QWidget* parent)
 UnlockView::~UnlockView() = default;
 
 void UnlockView::build_ui() {
-    // 根容器：垂直布局，整体居中
+    // 根容器：垂直布局，整体居Medium
     auto* root_layout = new QVBoxLayout(this);
     root_layout->setContentsMargins(0, 0, 0, 0);
     root_layout->setSpacing(0);
@@ -74,19 +74,19 @@ void UnlockView::build_ui() {
     card_layout->addWidget(shield_icon_label_);
 
     // 标题
-    title_label_ = new QLabel(QStringLiteral("PwdVault"), card);
+    title_label_ = new QLabel(QStringLiteral("Yuli Vault"), card);
     title_label_->setAlignment(Qt::AlignCenter);
     title_label_->setProperty("cssClass", QStringLiteral("titleLg"));
     card_layout->addWidget(title_label_);
 
     // 副标题
     subtitle_label_ = new QLabel(
-        tr("输入程序密码以解锁保险库"), card);
+        tr("Enter the program password to unlock the vault"), card);
     subtitle_label_->setAlignment(Qt::AlignCenter);
     subtitle_label_->setProperty("cssClass", QStringLiteral("muted"));
     card_layout->addWidget(subtitle_label_);
 
-    // 密码输入框容器：lock 图标 + 输入框 + 可见性按钮 一体化
+    // Password输入框容器：lock 图标 + 输入框 + 可见性按钮 一体化
     auto* pwd_container = new QFrame(card);
     pwd_container->setFixedHeight(40);
     pwd_container->setProperty("cssClass", QStringLiteral("inputField"));
@@ -106,7 +106,7 @@ void UnlockView::build_ui() {
     // 输入框（透明背景，无边框，融入容器）
     password_edit_ = new QLineEdit(pwd_container);
     password_edit_->setEchoMode(QLineEdit::Password);
-    password_edit_->setPlaceholderText(tr("程序密码"));
+    password_edit_->setPlaceholderText(tr("Program password"));
     password_edit_->setProperty("cssClass", QStringLiteral("inlineEdit"));
     pwd_layout->addWidget(password_edit_, 1);
 
@@ -133,23 +133,23 @@ void UnlockView::build_ui() {
     hint_row->addWidget(hint_icon);
 
     auto* hint_text = new QLabel(
-        tr("连续 5 次失败将锁定 5 分钟"), card);
+        tr("Five failed attempts lock the vault for 5 minutes"), card);
     hint_text->setProperty("cssClass", QStringLiteral("caption"));
     hint_row->addWidget(hint_text);
     hint_row->addStretch(1);
 
     attempts_label_ = new QLabel(
-        tr("剩余尝试 5/5"), card);
+        tr("Attempts left 5/5"), card);
     attempts_label_->setProperty("cssClass", QStringLiteral("caption"));
     attempts_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     hint_row->addWidget(attempts_label_);
     card_layout->addLayout(hint_row);
 
-    // 解锁按钮
+    // Unlock按钮
     submit_button_ = new QPushButton(card);
     submit_button_->setIcon(tinted_icon(QStringLiteral(":/icons/lock-open.svg"), IconRole::OnPrimary));
     submit_button_->setIconSize(QSize(18, 18));
-    submit_button_->setText(tr("解锁"));
+    submit_button_->setText(tr("Unlock"));
     submit_button_->setCursor(Qt::PointingHandCursor);
     submit_button_->setFixedHeight(40);
     submit_button_->setProperty("cssClass", QStringLiteral("primary"));
@@ -180,7 +180,7 @@ void UnlockView::build_ui() {
     footer_row->addWidget(footer_icon);
 
     auto* footer_text = new QLabel(
-        tr("本地加密 · AES-256-GCM · Argon2id"), card);
+        tr("Local encryption · AES-256-GCM · Argon2id"), card);
     footer_text->setProperty("cssClass", QStringLiteral("caption"));
     footer_row->addWidget(footer_text);
     footer_row->addStretch(1);
@@ -247,13 +247,13 @@ void UnlockView::on_submit_clicked() {
     set_error(QString());
 
     if (!client_) {
-        set_error(tr("内部错误：IPC 客户端不可用。"));
+        set_error(tr("Internal error: IPC client is unavailable."));
         return;
     }
 
     const std::string password = password_edit_->text().toStdString();
     if (password.empty()) {
-        set_error(tr("程序密码不能为空。"));
+        set_error(tr("Program password cannot be empty."));
         return;
     }
 
@@ -280,15 +280,15 @@ void UnlockView::on_submit_clicked() {
             update_attempts_display();
             if (remaining_attempts_ <= 0) {
                 if (submit_button_) submit_button_->setEnabled(false);
-                set_error(tr("尝试次数已用尽，请稍后再试。"));
+                set_error(tr("No attempts left. Try again later."));
                 password_edit_->clear();
                 return;
             }
         }
 
         set_error(msg.isEmpty()
-                      ? tr("解锁失败，请检查程序密码。")
-                      : tr("解锁失败：%1").arg(msg));
+                      ? tr("Unlock failed. Check the program password.")
+                      : tr("Unlock failed: %1").arg(msg));
 
         password_edit_->clear();
         password_edit_->setFocus();
@@ -308,15 +308,15 @@ void UnlockView::update_attempts_display() {
     if (cooldown_remaining_seconds_ > 0) {
         // 冷却态：显示倒计时秒数（红色 error 样式）
         attempts_label_->setText(
-            tr("已锁定，请 %1 秒后重试")
+            tr("Locked. Retry in %1 seconds")
                 .arg(cooldown_remaining_seconds_));
         attempts_label_->setProperty("cssClass", QStringLiteral("error"));
     } else if (remaining_attempts_ > 0) {
         attempts_label_->setText(
-            tr("剩余尝试 %1/5").arg(remaining_attempts_));
+            tr("Attempts left %1/5").arg(remaining_attempts_));
         attempts_label_->setProperty("cssClass", QStringLiteral("caption"));
     } else {
-        attempts_label_->setText(tr("已锁定"));
+        attempts_label_->setText(tr("Locked"));
         attempts_label_->setProperty("cssClass", QStringLiteral("error"));
     }
     // 切换 dynamic property 后必须 unpolish + polish 才能让 QSS 重新生效
@@ -326,9 +326,10 @@ void UnlockView::update_attempts_display() {
 
 bool UnlockView::parse_unlock_failure(const QString& message) {
     // 冷却格式优先：匹配 "请 N 秒后重试"
-    // （service 在 is_in_cooldown 命中与刚触发锁定两条路径均写入此子串）
+    // （service 在 is_in_cooldown 命Medium与刚触发锁定两条路径均写入此子串）
     static const QRegularExpression cooldown_re(
-        QStringLiteral("请 (\\d+) 秒后重试"));
+        QStringLiteral("retry in (\\d+) seconds"),
+        QRegularExpression::CaseInsensitiveOption);
     const auto m1 = cooldown_re.match(message);
     if (m1.hasMatch()) {
         const int seconds = m1.captured(1).toInt();
@@ -344,7 +345,8 @@ bool UnlockView::parse_unlock_failure(const QString& message) {
 
     // 剩余次数格式：匹配 "剩余 N 次尝试"
     static const QRegularExpression attempts_re(
-        QStringLiteral("剩余 (\\d+) 次尝试"));
+        QStringLiteral("(\\d+) attempts remaining"),
+        QRegularExpression::CaseInsensitiveOption);
     const auto m2 = attempts_re.match(message);
     if (m2.hasMatch()) {
         remaining_attempts_ = m2.captured(1).toInt();
@@ -376,7 +378,7 @@ void UnlockView::on_cooldown_tick() {
             password_edit_->setEnabled(true);
             password_edit_->setFocus();
         }
-        // 冷却结束：恢复初始剩余次数（spec 要求"倒计时归零后恢复'剩余尝试 5/5'"）
+        // 冷却结束：恢复初始剩余次数（spec 要求"倒计时归零后恢复'Attempts left 5/5'"）
         remaining_attempts_ = 5;
         update_attempts_display();
     } else {
@@ -384,4 +386,4 @@ void UnlockView::on_cooldown_tick() {
     }
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

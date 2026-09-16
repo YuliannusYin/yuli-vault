@@ -1,239 +1,96 @@
-# PwdVault
+# Yuli Vault
 
-一个安全、透明、可控的本地密码管理器。所有密码数据保存在你的电脑本地，不与任何云端服务通信。
+A local encrypted vault for logins. Data stays on your computer. Nothing is sent to the cloud.
 
----
+English is the default language of the app. If Windows is set to Chinese, the UI loads Simplified Chinese. You can also pick **System / English / 简体中文** in Settings.
 
-## 项目简介
-
-PwdVault 帮助你安全地存储和管理各类账号密码。与传统云端密码管理器不同，它完全运行在你的本地电脑上，密码数据永远不会离开你的设备。
-
-**核心特点：**
-
-- **本地优先**：所有数据存储在本地，无需联网，不依赖任何云服务
-- **强加密保护**：使用 AES-256-GCM 加密算法保护每一条密码
-- **主密码机制**：只需记住一个主密码，即可访问所有密码
-- **双进程架构**：借鉴安全软件设计，核心加密逻辑与界面分离，提升安全性
-- **零遥测**：不收集任何使用数据，不发送任何分析信息
+中文说明见 [README.zh-CN.md](README.zh-CN.md).
 
 ---
 
-## 功能特性
+## What it does
 
-### 密码管理
+- **Local first**: vault files live in `%APPDATA%\YuliVault\`
+- **Optional encryption**: a program password derives an AES-256-GCM key with Argon2id
+- **Two processes**: the Qt UI talks to `yuli-vault-service.exe` over a named pipe
+- **No telemetry**
 
-- 添加、编辑、删除密码条目
-- 完整字段：条目名（必填）、用户名、账号（必填）、密码（必填）、网站、标签、备注（markdown）
-- 自动记录条目创建时间与最后修改时间
-- 多维度搜索：按条目名、账号、用户名、网站、备注单独搜索，或全部字段搜索
-- 查看密码详情（可切换显示/隐藏），每个字段独立复制按钮
-- 标签管理：芯片式输入，支持回车添加、退格删除、已有标签补全
-- Markdown 备注：详情页自动渲染标题、粗体、代码、链接、列表等语法
-
-### 密码生成器
-
-- 自定义密码长度（4-128 位）
-- 选择字符集（大写、小写、数字、符号）
-- 排除易混字符（如 `i`、`l`、`1`、`O`、`0`）
-- 实时显示密码强度评估（5 级：极弱 / 弱 / 中 / 强 / 极强，含模式检测）
-- 一键复制生成的密码
-- **生成记录**：自动保存生成历史，可在设置页「生成器」card 中查看、复制、删除或清空；支持配置保留上限（无限 / 10 / 20 / 50 / 100 / 200 条）
-
-### 安全设计
-
-- 主密码使用 Argon2id 算法派生密钥，抵御暴力破解
-- 连续 5 次输入错误主密码将临时锁定 5 分钟
-- 主密码仅存在于内存中，关闭程序后即清除
-- 服务进程在无操作 30 秒后自动退出，减少敏感数据驻留时间
-- 生成记录与密码条目采用同一加密管线（AES-256-GCM），启用 / 禁用程序密码时同步重加密并保留原始生成时间
+This 4.x release stores a unified `VaultItem` model. The editor is **Login only** (title, account, username, password, website, tags, Markdown notes). Secure note, card, identity, and custom types are reserved in the database for later versions.
 
 ---
 
-## 下载与安装
+## Features
 
-### 方式一：下载安装包（推荐）
+### Vault (logins)
 
-1. 前往 [Releases 页面](https://github.com/YuliannusYin/PWDVault/releases)（待发布）
-2. 下载最新的 `pwdvault-<version>-setup.exe`
-3. 双击运行安装程序，按提示完成安装
-4. 安装完成后，从开始菜单或桌面快捷方式启动 PwdVault
+- Add, edit, delete login items
+- Search title, account, username, website, and notes
+- Tags, timestamps, copy-to-clipboard (clears after 30 seconds)
+- Markdown notes in the detail pane
 
-**系统要求：**
-- Windows 10 64 位或更高版本
-- 不需要预装其他运行时（安装包已包含）
+### Password generator
 
-### 方式二：便携版（绿色软件）
+- Length 4–128, charset toggles, exclude similar characters
+- Strength estimate (five bands) with pattern warnings
+- History with a configurable retention limit
 
-从 Releases 页面下载 `pwdvault-<version>-portable.zip`，解压到任意目录后运行 `bin\pwdvault-ui.exe` 即可。便携版根目录含 `portable.txt` 标记文件，不写注册表、不污染系统目录。
+### Security
 
-### 方式三：自行构建
+- Program password: enable / change / disable
+- Five failed unlocks lock the vault for 5 minutes
+- Auto-lock after idle time
+- Lock from the sidebar, tray, or Settings
 
-适用于开发者或希望从源码编译的用户，请参阅 [AGENTS.md](AGENTS.md) 与 [docs/BUILD.md](docs/BUILD.md)。
-
----
-
-## 快速上手
-
-### 首次启动
-
-1. 启动 PwdVault 后，会提示你设置主密码
-2. 输入一个强密码（建议至少 12 位，包含大小写字母、数字、符号）
-3. 再次输入确认
-4. 主密码设置完成，进入主界面
-
-> **重要提示**：主密码是访问你所有密码的唯一钥匙，**无法找回**。请务必牢记，或保存在安全的地方（如离线密码本、密码提示卡）。
-
-### 添加密码条目
-
-1. 点击左侧侧边栏的「录入」
-2. 填写必填字段：条目名、账号、密码
-3. （可选）填写用户名、网站、标签、备注（支持 markdown 语法）
-4. 点击「保存条目」
-
-你也可以点击密码字段右侧的「生成」按钮，跳转到生成器视图快速生成一个强密码。
-
-> **字段说明**：
-> - **条目名**（必填）：条目显示标题，如「GitHub 个人账号」「公司邮箱」
-> - **账号**（必填）：登录 ID 或邮箱
-> - **用户名**（可选）：显示名，如「张三」
-> - **密码**（必填）：明文密码，加密存储
-> - **网站**（可选）：站点 URL，详情页可一键打开
-> - **标签**（可选）：芯片式输入，回车添加，支持已有标签补全
-> - **备注**（可选）：markdown 源码，详情页自动渲染
-
-### 查找密码
-
-1. 点击侧边栏的「密码本」
-2. 在顶部搜索框输入关键词
-3. 选择搜索字段（全部 / 条目名 / 账号 / 用户名 / 网站 / 备注）
-4. 点击「搜索」按钮，或直接在列表中浏览
-
-### 编辑或删除密码
-
-1. 在密码本中选择一条记录
-2. 点击「编辑」修改字段后保存，或点击「删除」移除该条目
-3. 删除前会弹出确认对话框，避免误操作
-
-### 使用密码生成器
-
-1. 点击侧边栏的「生成器」
-2. 调整密码长度与字符集
-3. 点击「生成密码」
-4. 查看强度指示器：
-   - **极弱**（红色）/ **弱**（橙色）：建议增加长度或扩展字符集
-   - **中**（蓝色）：基本可用
-   - **强**（浅绿）/ **极强**（深绿）：安全强度良好
-   - 强度评估会检测重复字符、顺序序列、键盘序列、字符分布不均等弱模式并扣减熵值
-5. 点击「复制到剪贴板」即可使用
-6. 生成的密码会自动保存到生成记录（可在设置页「生成器」card 中查看）
+When a program password is on, **the whole login payload is encrypted** (account, username, password, website, notes). Title, type, and tags stay plaintext so the list can still filter. Plaintext mode stores the payload unencrypted.
 
 ---
 
-## 数据存储位置
+## Install
 
-PwdVault 的所有数据保存在以下位置：
+Download a release installer (`yuli-vault-4.x.x-setup.exe`) or build from source ([docs/BUILD.md](docs/BUILD.md)).
 
-```
-%APPDATA%\PwdVault\
-├── vault.db          # 加密的密码数据库（含 passwords / generated_passwords / tags / entry_tags / settings 表）
-└── vault.meta        # 主密码相关元数据（仅加密模式存在）
+Yuli Vault can sit next to an older PwdVault install. It uses a new Inno Setup AppId. Data is **copied**, not moved:
+
+1. If `%APPDATA%\YuliVault\` already exists, that folder is used.
+2. Else if `%APPDATA%\PwdVault\` exists, it is copied to `YuliVault\` and a `migrated_from_pwdvault` marker is written. The old folder is kept as a backup.
+3. Otherwise a new `YuliVault\` folder is created.
+
+A v2 PwdVault database (`passwords` table, password-only ciphertext) is upgraded to schema v3 (`vault_items`, payload ciphertext) on first plaintext start, or on the first successful unlock if a program password is set.
+
+---
+
+## Usage
+
+1. Start **Yuli Vault** (`yuli-vault-ui.exe`). The UI starts the service if needed.
+2. Optionally enable a program password under Settings.
+3. Create logins from **New Item**. Browse them in **Vault**.
+4. Generate passwords in **Generator**.
+
+---
+
+## Data locations
+
+| File | Path |
+| --- | --- |
+| Database | `%APPDATA%\YuliVault\vault.db` |
+| Wrapped encryption key | `%APPDATA%\YuliVault\vault.meta` |
+| Named pipe | `\\.\pipe\YuliVaultService` |
+
+---
+
+## Build from source
+
+See [docs/BUILD.md](docs/BUILD.md). Short version:
+
+```powershell
+$env:VCPKG_ROOT = "<vcpkg>"
+$env:CMAKE_PREFIX_PATH = "<Qt 6>\msvc2022_64"
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build --config Release
 ```
 
-完整路径通常是：`C:\Users\<你的用户名>\AppData\Roaming\PwdVault\`
-
-### 备份与恢复
-
-- **备份**：复制整个 `%APPDATA%\PwdVault\` 目录到安全位置（如外部硬盘、加密 U 盘）
-- **恢复**：将备份的目录覆盖回原位置即可
-- **卸载影响**：卸载 PwdVault **不会**删除 `%APPDATA%\PwdVault\`，你的数据是安全的
-
-> **注意**：`vault.db` 与 `vault.meta` 必须一起备份，缺一不可。仅备份 `vault.db` 无法解密。
-
 ---
 
-## 安全说明
+## License
 
-### 加密方案
-
-- **密码加密**：AES-256-GCM（每条密码独立 IV 与认证标签，防重放攻击）
-- **主密码派生**：Argon2id（抵御 GPU/ASIC 暴力破解）
-- **密钥层次**：主密码 → Argon2id → KEK → 主密钥 → 加密每条密码
-
-### 安全建议
-
-1. **设置强主密码**：至少 12 位，包含大小写字母、数字、符号，不要使用生日、姓名等易猜信息
-2. **定期备份**：将 `%APPDATA%\PwdVault\` 备份到加密的外部存储
-3. **不要分享主密码**：任何情况下都不要将主密码告诉他人
-4. **不要分享 `vault.meta` 文件**：该文件包含主密码的验证信息
-5. **使用全盘加密**：建议启用 Windows BitLocker，进一步保护本地数据
-
-### 已知限制
-
-- 无法防御物理攻击（如冷启动攻击、硬件级内存取证）
-- 未使用 TPM/SGX 等硬件安全模块
-- 主密码遗忘后**无法**恢复数据（这是安全设计的代价）
-
-更多技术细节请参阅 [docs/SECURITY.md](docs/SECURITY.md)。
-
----
-
-## 常见问题
-
-### 忘记主密码怎么办？
-
-很遗憾，由于 PwdVault 采用端到端加密设计，主密码仅存在于你的内存中，**无法找回**。如果你有数据备份，可以从备份恢复；否则只能重置整个密码库（会丢失所有已保存的密码）。
-
-**重置方法：**
-1. 关闭 PwdVault
-2. 删除 `%APPDATA%\PwdVault\` 目录下的 `vault.db` 与 `vault.meta`
-3. 重新启动 PwdVault，会提示你设置新的主密码
-
-### 主密码输入错误被锁定了怎么办？
-
-连续 5 次输入错误主密码后，系统会锁定 5 分钟。请等待锁定时间结束后再尝试，或重启程序（重启后仍需等待锁定时间过去）。
-
-### 杀毒软件误报怎么办？
-
-由于 PwdVault 使用加密与命名管道通信，少数杀毒软件可能误报。你可以：
-1. 将 PwdVault 安装目录加入杀毒软件白名单
-2. 从 [Releases 页面](https://github.com/YuliannusYin/PWDVault/releases) 重新下载官方版本
-3. 自行从源码构建以确认安全性
-
-### 数据可以同步到手机吗？
-
-当前版本不支持跨设备同步。所有数据仅保存在你的电脑本地。后续版本可能提供加密导出/导入功能，便于手动迁移。
-
-### 可以从其他密码管理器导入数据吗？
-
-当前不支持从旧版 Python PwdVault 或其他密码管理器（1Password、Bitwarden 等）导入数据。导入功能在规划中。
-
-### 如何升级到新版本？
-
-直接下载新版本安装包运行安装，会自动覆盖旧版本。你的数据（`%APPDATA%\PwdVault\`）不会被影响。建议升级前先备份。
-
----
-
-## 反馈与支持
-
-- **问题反馈**：[GitHub Issues](https://github.com/YuliannusYin/PWDVault/issues)
-- **联系方式**：mry_2025@outlook.com
-- **贡献代码**：请参阅 [AGENTS.md](AGENTS.md) 了解开发指南
-
----
-
-## 许可证
-
-本项目采用 [MIT 许可证](LICENSE)。
-
----
-
-## 致谢
-
-PwdVault 的设计借鉴了 [火绒安全软件](https://www.huorong.cn/) 的双进程架构理念，使用以下开源项目：
-
-- [Qt 6](https://www.qt.io/) — GUI 框架
-- [OpenSSL](https://www.openssl.org/) — 加密库
-- [libsodium](https://libsodium.org/) — Argon2id 密钥派生
-- [SQLite](https://www.sqlite.org/) — 嵌入式数据库
-
-感谢以上项目的贡献者。
+[MIT](LICENSE). Source: [github.com/YuliannusYin/yuli-vault](https://github.com/YuliannusYin/yuli-vault).

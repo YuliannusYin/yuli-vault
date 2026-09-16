@@ -2,21 +2,21 @@
 // =============================================================================
 // GeneratorHistoryDialog.h
 //
-// PwdVault 生成器历史记录对话框。
+// Yuli Vault Generator history对话框。
 //
-// 模态遮罩弹窗（720px 居中卡片）：
-//   - 头部：clock 图标 + 标题 + X 关闭
-//   - 工具栏：[显示密码] 切换 + 记录数标签 + [刷新] 按钮
-//   - 表格：# / 时间 / 长度 / 密码 / 操作（复制、删除）
-//   - 尾部：[清空全部] + [关闭]
+// 模态遮罩弹窗（720px 居Medium卡片）：
+//   - 头部：clock 图标 + 标题 + X Close
+//   - 工具栏：[Show password] 切换 + 记录数Tags + [Refresh] 按钮
+//   - 表格：# / Time / Length / Password / Actions（Copy、Delete）
+//   - 尾部：[Clear all] + [Close]
 //
 // 通过 IpcClient 调用 service：
 //   - list_generated_records：加载列表
-//   - remove_generated_record(id)：删除单条
-//   - clear_generated_records：清空全部
+//   - remove_generated_record(id)：Delete单条
+//   - clear_generated_records：Clear all
 //
-// 密码列默认以圆点遮罩显示（不可读），勾选「显示密码」后明文显示。
-// 删除/清空操作后自动刷新表格。
+// Password列默认以圆点遮罩显示（不可读），勾选「Show password」后明文显示。
+// Delete/清空Actions后自动Refresh表格。
 // =============================================================================
 #pragma once
 
@@ -34,7 +34,7 @@ class QLabel;
 class QPushButton;
 class QTableWidget;
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class IpcClient;
 
@@ -44,12 +44,12 @@ public:
     explicit GeneratorHistoryDialog(IpcClient* client, QWidget* parent = nullptr);
     ~GeneratorHistoryDialog() override;
 
-    /// 重新加载记录列表并刷新表格。
+    /// 重新加载记录列表并Refresh表格。
     /// 调用方可在显示前调用以预填充。
     void reload();
 
 signals:
-    /// 用户在空状态点击「去生成密码」时触发，父窗口切换到 GeneratorView。
+    /// 用户在空状态点击「Generate a password」时触发，父窗口切换到 GeneratorView。
     void generate_requested();
 
 protected:
@@ -66,13 +66,13 @@ private:
     void build_ui();
     /// 拉取 service 端列表并填充表格。失败时显示空表 + 错误提示。
     void populate_table();
-    /// 重新渲染表格中密码列的显示样式（圆点 / 明文）。
+    /// 重新渲染表格MediumPassword列的显示样式（圆点 / 明文）。
     void refresh_password_cells();
-    /// 在指定行渲染「复制 / 删除」操作按钮单元格。
+    /// 在指定行渲染「Copy / Delete」Actions按钮单元格。
     void install_action_widget(int row, int64_t record_id);
-    /// 删除指定记录（调用 service 后刷新）。
+    /// Delete指定记录（调用 service 后Refresh）。
     void delete_record(int64_t record_id);
-    /// 设置错误提示文本（可空字符串清除）。
+    /// Settings错误提示文本（可空字符串Clear）。
     void set_status(const QString& message, bool is_error);
 
     IpcClient* client_;
@@ -84,8 +84,8 @@ private:
     QTableWidget* table_ = nullptr;
     QPushButton* clear_all_btn_ = nullptr;
     QPushButton* close_btn_ = nullptr;
-    QLabel* empty_label_ = nullptr;            ///< 空状态文案标签
+    QLabel* empty_label_ = nullptr;            ///< 空状态文案Tags
     QPushButton* empty_action_button_ = nullptr;  ///< 空状态引导按钮
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

@@ -9,10 +9,10 @@
 #   - generator/ 密码生成器实现
 #   - protocol/  IPC 协议层（UI 进程 ↔ 服务进程）— Task 7 加入
 #
-# 聚合 target 为 `pwdvault-sdk`（别名 `PwdVault::Sdk`），链接所有子模块。
+# 聚合 target 为 `yuli-vault-sdk`（别名 `YuliVault::Sdk`），链接所有子模块。
 # =============================================================================
 
-message(STATUS "PwdVault: 进入 src/sdk/ 子目录")
+message(STATUS "Yuli Vault: src/sdk/ configured")
 
 add_subdirectory(core)
 add_subdirectory(crypto)
@@ -21,12 +21,12 @@ add_subdirectory(generator)
 add_subdirectory(protocol)
 
 # 聚合 SDK target：链接所有子模块，供 UI 与 service 进程统一引用
-add_library(pwdvault-sdk INTERFACE)
-target_link_libraries(pwdvault-sdk INTERFACE
-    pwdvault-sdk-core
-    pwdvault-crypto
-    pwdvault-storage
-    pwdvault-generator
-    pwdvault-protocol
+add_library(yuli-vault-sdk INTERFACE)
+target_link_libraries(yuli-vault-sdk INTERFACE
+    yuli-vault-sdk-core
+    yuli-vault-crypto
+    yuli-vault-storage
+    yuli-vault-generator
+    yuli-vault-protocol
 )
-add_library(PwdVault::Sdk ALIAS pwdvault-sdk)
+add_library(YuliVault::Sdk ALIAS yuli-vault-sdk)

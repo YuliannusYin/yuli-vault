@@ -25,7 +25,7 @@
 
 #include <sodium.h>
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 namespace {
 
@@ -328,4 +328,4 @@ core::Error ProgramPasswordStore::destroy() {
     return core::Error{};
 }
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

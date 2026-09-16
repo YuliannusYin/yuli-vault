@@ -79,7 +79,7 @@ std::filesystem::path make_unique_meta_path() {
 
 }  // namespace
 
-namespace pwdvault::test {
+namespace yuli::vault::test {
 
 /// 端到端流程测试夹具。
 ///
@@ -322,7 +322,7 @@ TEST_F(E2EFlowTest, EnableTwiceReturnsFailure) {
 TEST_F(E2EFlowTest, EnableReencryptsExistingEntries) {
     // 1. 明文模式下添加条目
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -374,7 +374,7 @@ TEST_F(E2EFlowTest, AddEntryAfterLockReturnsUnauthorized) {
     lock();
 
     protocol::AddEntryRequest req;
-    req.entry.entry_name = "GitHub";
+    req.entry.title = "GitHub";
     req.entry.account = "user1";
     req.entry.website = "github.com";
     req.entry.username = "user1";
@@ -431,12 +431,12 @@ TEST_F(E2EFlowTest, FiveFailedUnlocksTriggerCooldown) {
     auto r = unlock(kTestProgramPassword);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_FALSE(r.value().success);
-    EXPECT_NE(r.value().error_message.find("已锁定"),
+    EXPECT_NE(r.value().error_message.find("Locked"),
               std::string::npos)
-        << "应包含冷却提示，实际: " << r.value().error_message;
-    EXPECT_NE(r.value().error_message.find("秒后重试"),
+        << "should mention lockout, got: " << r.value().error_message;
+    EXPECT_NE(r.value().error_message.find("seconds"),
               std::string::npos)
-        << "应包含剩余秒数，实际: " << r.value().error_message;
+        << "should include remaining seconds, got: " << r.value().error_message;
 }
 
 // =============================================================================
@@ -492,7 +492,7 @@ TEST_F(E2EFlowTest, DisableDecryptsEntriesBackToPlaintext) {
     // 1. 启用程序密码并添加条目
     enable_program_password();
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -575,7 +575,7 @@ TEST_F(E2EFlowTest, ChangePasswordPreservesEntries) {
 
     // 添加条目
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -617,7 +617,7 @@ TEST_F(E2EFlowTest, AddAndGetEntryRoundtrip) {
     enable_program_password();
 
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -662,7 +662,7 @@ TEST_F(E2EFlowTest, ListEntriesReturnsAllAdded) {
     auto add_one = [this](const std::string& website,
                          const std::string& username) -> int64_t {
         protocol::AddEntryRequest req;
-        req.entry.entry_name = website;
+        req.entry.title = website;
         req.entry.account = username;
         req.entry.website = website;
         req.entry.username = username;
@@ -709,7 +709,7 @@ TEST_F(E2EFlowTest, SearchEntriesByWebsiteReturnsMatchOnly) {
     auto add_one = [this](const std::string& website,
                          const std::string& username) -> int64_t {
         protocol::AddEntryRequest req;
-        req.entry.entry_name = website;
+        req.entry.title = website;
         req.entry.account = username;
         req.entry.website = website;
         req.entry.username = username;
@@ -744,7 +744,7 @@ TEST_F(E2EFlowTest, UpdateEntryModifiesFields) {
     enable_program_password();
 
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -794,7 +794,7 @@ TEST_F(E2EFlowTest, RemoveEntryThenGetReturnsNotFound) {
     enable_program_password();
 
     protocol::AddEntryRequest add_req;
-    add_req.entry.entry_name = "GitHub";
+    add_req.entry.title = "GitHub";
     add_req.entry.account = "user1";
     add_req.entry.website = "github.com";
     add_req.entry.username = "user1";
@@ -1264,7 +1264,7 @@ TEST_F(E2EFlowTest, FullUserJourneyPlaintextToEncryptedAndBack) {
     std::vector<int64_t> ids;
     for (int i = 0; i < 2; ++i) {
         protocol::AddEntryRequest req;
-        req.entry.entry_name = "site" + std::to_string(i) + ".com";
+        req.entry.title = "site" + std::to_string(i) + ".com";
         req.entry.account = "user" + std::to_string(i);
         req.entry.website = "site" + std::to_string(i) + ".com";
         req.entry.username = "user" + std::to_string(i);
@@ -1325,7 +1325,7 @@ TEST_F(E2EFlowTest, FullUserJourneyPlaintextToEncryptedAndBack) {
     // 7. 添加第 3 条条目
     {
         protocol::AddEntryRequest req;
-        req.entry.entry_name = "site2.com";
+        req.entry.title = "site2.com";
         req.entry.account = "user2";
         req.entry.website = "site2.com";
         req.entry.username = "user2";
@@ -1381,4 +1381,4 @@ TEST_F(E2EFlowTest, FullUserJourneyPlaintextToEncryptedAndBack) {
     }
 }
 
-}  // namespace pwdvault::test
+}  // namespace yuli::vault::test

@@ -2,7 +2,7 @@
 # =============================================================================
 # src/sdk/protocol/CMakeLists.txt
 #
-# PwdVault IPC 协议层。定义 pwdvault-protocol STATIC 库，提供：
+# PwdVault IPC 协议层。定义 yuli-vault-protocol STATIC 库，提供：
 #   - Commands.h     命令枚举 CommandId 与 command_name()
 #   - Messages.h     消息头 MessageHeader 与各 Request/Response 结构
 #   - Serializer.h/.cpp 二进制序列化/反序列化与消息帧封包/解包
@@ -12,23 +12,23 @@
 # 追加 serialize/deserialize 特化即可。
 # =============================================================================
 
-add_library(pwdvault-protocol STATIC
+add_library(yuli-vault-protocol STATIC
     Serializer.cpp
 )
 
-target_include_directories(pwdvault-protocol PUBLIC
+target_include_directories(yuli-vault-protocol PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(pwdvault-protocol
+target_link_libraries(yuli-vault-protocol
     PUBLIC
-        pwdvault-sdk-core
-        PwdVault::Warnings
+        yuli-vault-sdk-core
+        YuliVault::Warnings
 )
 
 # 强制 C++20（与项目顶层一致，因依赖 std::span / core::ByteSpan）
-target_compile_features(pwdvault-protocol PUBLIC cxx_std_20)
+target_compile_features(yuli-vault-protocol PUBLIC cxx_std_20)
 
-add_library(PwdVault::Protocol ALIAS pwdvault-protocol)
+add_library(YuliVault::Protocol ALIAS yuli-vault-protocol)
 
-message(STATUS "PwdVault: src/sdk/protocol/ 配置完成（STATIC 库）")
+message(STATUS "Yuli Vault: src/sdk/protocol/ configured")

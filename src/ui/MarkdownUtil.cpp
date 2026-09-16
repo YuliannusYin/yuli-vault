@@ -9,7 +9,7 @@
 //   2. 按行分块处理：代码块 / 标题 / 列表 / 段落
 //   3. 块内处理行内元素：粗体、斜体、行内代码、链接（协议白名单）
 //
-// 限制：不完整支持 CommonMark，仅覆盖备注常见场景。
+// 限制：不完整支持 CommonMark，仅覆盖Notes常见场景。
 // =============================================================================
 #include "MarkdownUtil.h"
 
@@ -19,12 +19,12 @@
 #include <QRegularExpression>
 #include <string>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
 /// 转义 HTML 特殊字符。
-/// 注意：& 必须最先替换，否则会把后引入的 &quot; / &#39; 中的 & 再次转义。
+/// 注意：& 必须最先替换，否则会把后引入的 &quot; / &#39; Medium的 & 再次转义。
 QString escape_html(const QString& s) {
     QString out = s;
     out.replace('&', QStringLiteral("&amp;"));
@@ -89,7 +89,7 @@ QString markdown_to_html(const std::string& md) {
 
 QString markdown_to_html(const QString& md) {
     if (md.isEmpty()) {
-        return QCoreApplication::translate("MarkdownUtil", "<p class=\"muted\">（无）</p>");
+        return QCoreApplication::translate("MarkdownUtil", "<p class=\"muted\">(none)</p>");
     }
 
     const QStringList lines = md.split('\n');
@@ -127,7 +127,7 @@ QString markdown_to_html(const QString& md) {
 
         const QString trimmed = line.trimmed();
 
-        // 空行：关闭列表，输出段落分隔
+        // 空行：Close列表，输出段落分隔
         if (trimmed.isEmpty()) {
             close_lists();
             continue;
@@ -178,4 +178,4 @@ QString markdown_to_html(const QString& md) {
     return html.join('\n');
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

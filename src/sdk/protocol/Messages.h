@@ -24,7 +24,7 @@
 #include "Error.h"
 #include "Types.h"
 
-namespace pwdvault::protocol {
+namespace yuli::vault::protocol {
 
 /// 协议魔数 "PDVV"（小端序：0x56 0x44 0x56 0x50）。
 /// 用于在字节流头部快速识别 PwdVault IPC 帧，避免误解析其他来源数据。
@@ -33,7 +33,8 @@ inline constexpr uint32_t kMagic = 0x50564456u;
 /// 协议版本号。当前为 1。
 ///   - 未来若引入不兼容变更（如字段重排、新枚举语义），递增此值。
 ///   - 同一版本内向后兼容追加字段，需在 Serializer 中处理缺省值。
-inline constexpr uint16_t kProtocolVersion = 1;
+/// Current protocol version. Bumped to 2 when VaultItem gained a type byte.
+inline constexpr uint16_t kProtocolVersion = 2;
 
 /// 消息头（固定 16 字节）。
 ///
@@ -348,4 +349,4 @@ struct ErrorResponse {
     std::string message;
 };
 
-}  // namespace pwdvault::protocol
+}  // namespace yuli::vault::protocol

@@ -19,23 +19,24 @@
 #include "InMemoryStorageEngine.h"
 #include "StorageEngine.h"
 #include "Types.h"
+#include "VaultPayload.h"
 
 namespace {
 
 /// 构造一个测试用 PasswordEntry（id=0 表示新条目）。
-pwdvault::core::PasswordEntry make_entry(const std::string& website,
+yuli::vault::core::PasswordEntry make_entry(const std::string& website,
                                          const std::string& username,
                                          const std::string& note = "") {
-    pwdvault::core::PasswordEntry e;
-    e.entry_name = website;  // 用 website 作为显示标题
+    yuli::vault::core::PasswordEntry e;
+    e.title = website;  // 用 website 作为显示标题
     e.account = username;     // 用 username 作为登录账号
     e.website = website;
     e.username = username;
     e.password = "cipher-blob-bytes";  // 模拟已加密的密文（实际由 ICryptoEngine 产出）
     e.note = note;
     // 模拟 12 字节 IV 与 16 字节 GCM tag
-    e.iv.assign(12, pwdvault::core::ByteVec::value_type{0xAB});
-    e.tag.assign(16, pwdvault::core::ByteVec::value_type{0xCD});
+    e.iv.assign(12, yuli::vault::core::ByteVec::value_type{0xAB});
+    e.tag.assign(16, yuli::vault::core::ByteVec::value_type{0xCD});
     return e;
 }
 
@@ -46,7 +47,7 @@ pwdvault::core::PasswordEntry make_entry(const std::string& website,
 // =============================================================================
 
 TEST(InMemoryStorageEngineTest, AddEntryAssignsIncrementingId) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto e1 = make_entry("github.com", "alice");
     auto e2 = make_entry("gitlab.com", "bob");
 
@@ -63,7 +64,7 @@ TEST(InMemoryStorageEngineTest, AddEntryAssignsIncrementingId) {
 }
 
 TEST(InMemoryStorageEngineTest, GetEntryReturnsInsertedAndNotFound) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto e = make_entry("github.com", "alice", "personal account");
 
     auto added = engine.add_entry(e);
@@ -81,11 +82,11 @@ TEST(InMemoryStorageEngineTest, GetEntryReturnsInsertedAndNotFound) {
 
     auto miss = engine.get_entry(99999);
     ASSERT_FALSE(miss.ok());
-    EXPECT_EQ(miss.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(miss.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, UpdateEntryModifiesFieldsAndBumpsTimestamp) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto added = engine.add_entry(make_entry("github.com", "alice"));
     ASSERT_TRUE(added.ok());
     const int64_t created_at = added.value().created_at;
@@ -112,16 +113,16 @@ TEST(InMemoryStorageEngineTest, UpdateEntryModifiesFieldsAndBumpsTimestamp) {
 }
 
 TEST(InMemoryStorageEngineTest, UpdateEntryNotFoundReturnsError) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto e = make_entry("github.com", "alice");
     e.id = 42;
     auto r = engine.update_entry(e);
     ASSERT_FALSE(r.ok());
-    EXPECT_EQ(r.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(r.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, RemoveEntryAndSubsequentGetFails) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto added = engine.add_entry(make_entry("github.com", "alice"));
     ASSERT_TRUE(added.ok());
 
@@ -130,18 +131,18 @@ TEST(InMemoryStorageEngineTest, RemoveEntryAndSubsequentGetFails) {
 
     auto miss = engine.get_entry(added.value().id);
     ASSERT_FALSE(miss.ok());
-    EXPECT_EQ(miss.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(miss.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, RemoveEntryNotFoundReturnsError) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto rm = engine.remove_entry(99999);
     ASSERT_FALSE(rm.ok());
-    EXPECT_EQ(rm.code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(rm.code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, ListEntriesReturnsAll) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "u1")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("b.com", "u2")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("c.com", "u3")).ok());
@@ -152,12 +153,12 @@ TEST(InMemoryStorageEngineTest, ListEntriesReturnsAll) {
 }
 
 TEST(InMemoryStorageEngineTest, SearchByWebsite) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("github.com", "alice")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("gitlab.com", "bob")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("example.com", "carol")).ok());
 
-    pwdvault::core::SearchQuery q;
+    yuli::vault::core::SearchQuery q;
     q.text = "git";
     q.fields = {"website"};
     q.case_sensitive = false;
@@ -170,12 +171,12 @@ TEST(InMemoryStorageEngineTest, SearchByWebsite) {
 }
 
 TEST(InMemoryStorageEngineTest, SearchByUsername) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "alice")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("b.com", "bob")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("c.com", "alice_smith")).ok());
 
-    pwdvault::core::SearchQuery q;
+    yuli::vault::core::SearchQuery q;
     q.text = "alice";
     q.fields = {"username"};
     q.case_sensitive = false;
@@ -185,12 +186,12 @@ TEST(InMemoryStorageEngineTest, SearchByUsername) {
 }
 
 TEST(InMemoryStorageEngineTest, SearchByNote) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "u1", "work account")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("b.com", "u2", "personal")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("c.com", "u3", "WORK email")).ok());
 
-    pwdvault::core::SearchQuery q;
+    yuli::vault::core::SearchQuery q;
     q.text = "work";
     q.fields = {"note"};
     q.case_sensitive = false;
@@ -200,11 +201,11 @@ TEST(InMemoryStorageEngineTest, SearchByNote) {
 }
 
 TEST(InMemoryStorageEngineTest, SearchCaseSensitive) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("github.com", "Alice")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("example.com", "alice")).ok());
 
-    pwdvault::core::SearchQuery q_cs;
+    yuli::vault::core::SearchQuery q_cs;
     q_cs.text = "Alice";
     q_cs.fields = {"username"};
     q_cs.case_sensitive = true;
@@ -213,7 +214,7 @@ TEST(InMemoryStorageEngineTest, SearchCaseSensitive) {
     ASSERT_EQ(r_cs.value().size(), 1u);
     EXPECT_EQ(r_cs.value()[0].username, "Alice");
 
-    pwdvault::core::SearchQuery q_ci;
+    yuli::vault::core::SearchQuery q_ci;
     q_ci.text = "Alice";
     q_ci.fields = {"username"};
     q_ci.case_sensitive = false;
@@ -223,11 +224,11 @@ TEST(InMemoryStorageEngineTest, SearchCaseSensitive) {
 }
 
 TEST(InMemoryStorageEngineTest, SearchEmptyFieldsSearchesAll) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.add_entry(make_entry("github.com", "alice")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("example.com", "bob", "secret note")).ok());
 
-    pwdvault::core::SearchQuery q;
+    yuli::vault::core::SearchQuery q;
     q.text = "github";  // 只匹配 website
     q.fields = {};       // 空表示搜索全部字段
     q.case_sensitive = false;
@@ -237,7 +238,7 @@ TEST(InMemoryStorageEngineTest, SearchEmptyFieldsSearchesAll) {
 }
 
 TEST(InMemoryStorageEngineTest, TransactionRollbackDiscardsAdds) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.begin_transaction().ok());
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "u1")).ok());
     ASSERT_TRUE(engine.add_entry(make_entry("b.com", "u2")).ok());
@@ -249,7 +250,7 @@ TEST(InMemoryStorageEngineTest, TransactionRollbackDiscardsAdds) {
 }
 
 TEST(InMemoryStorageEngineTest, TransactionCommitPersistsAdds) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     ASSERT_TRUE(engine.begin_transaction().ok());
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "u1")).ok());
     ASSERT_TRUE(engine.commit_transaction().ok());
@@ -262,7 +263,7 @@ TEST(InMemoryStorageEngineTest, TransactionCommitPersistsAdds) {
 TEST(InMemoryStorageEngineTest, TransactionRollbackRestoresIdCounter) {
     // 回滚后再次 add_entry，新 id 不应与已回滚的条目 id 冲突，
     // 也不应跳过号段（确保 next_id_ 也被恢复）。
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto first = engine.add_entry(make_entry("a.com", "u1"));
     ASSERT_TRUE(first.ok());
     const int64_t first_id = first.value().id;
@@ -286,13 +287,13 @@ TEST(InMemoryStorageEngineTest, TransactionRollbackRestoresIdCounter) {
 // =============================================================================
 
 TEST(StorageEngineSqliteTest, AddAndGetRoundtripsBlobFields) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
     auto e = make_entry("github.com", "alice", "personal");
     // 故意填充含 0 字节的 BLOB，验证二进制安全性。
     e.password = std::string("enc\0ry\0pted", 11);
-    e.iv = pwdvault::core::ByteVec(12, pwdvault::core::ByteVec::value_type{0x01});
-    e.tag = pwdvault::core::ByteVec(16, pwdvault::core::ByteVec::value_type{0x02});
+    e.iv = yuli::vault::core::ByteVec(12, yuli::vault::core::ByteVec::value_type{0x01});
+    e.tag = yuli::vault::core::ByteVec(16, yuli::vault::core::ByteVec::value_type{0x02});
 
     auto added = engine.add_entry(e);
     ASSERT_TRUE(added.ok()) << added.error().what();
@@ -314,7 +315,7 @@ TEST(StorageEngineSqliteTest, AddAndGetRoundtripsBlobFields) {
 }
 
 TEST(StorageEngineSqliteTest, UpdateAndRemoveOnSqlite) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
     auto added = engine.add_entry(make_entry("github.com", "alice"));
     ASSERT_TRUE(added.ok());
@@ -337,11 +338,11 @@ TEST(StorageEngineSqliteTest, UpdateAndRemoveOnSqlite) {
     ASSERT_TRUE(engine.remove_entry(id).ok());
     auto miss = engine.get_entry(id);
     ASSERT_FALSE(miss.ok());
-    EXPECT_EQ(miss.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(miss.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(StorageEngineSqliteTest, SqliteTransactionRollbackAndCommit) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
     ASSERT_TRUE(engine.begin_transaction().ok());
     ASSERT_TRUE(engine.add_entry(make_entry("a.com", "u1")).ok());
@@ -366,9 +367,9 @@ TEST(StorageEngineSqliteTest, SqliteTransactionRollbackAndCommit) {
 
 namespace {
 
-pwdvault::core::GeneratedPasswordRecord make_gen_record(const std::string& password,
+yuli::vault::core::GeneratedPasswordRecord make_gen_record(const std::string& password,
                                                           int32_t length) {
-    pwdvault::core::GeneratedPasswordRecord r;
+    yuli::vault::core::GeneratedPasswordRecord r;
     r.password = password;
     r.length = length;
     // iv / tag 留空（明文模式）；created_at 由引擎分配
@@ -378,7 +379,7 @@ pwdvault::core::GeneratedPasswordRecord make_gen_record(const std::string& passw
 }  // namespace
 
 TEST(InMemoryStorageEngineTest, AddGeneratedRecordAssignsIdAndTimestamp) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto r = make_gen_record("Pwd-Alpha", 10);
     auto added = engine.add_generated_record(r);
     ASSERT_TRUE(added.ok()) << added.error().what();
@@ -389,7 +390,7 @@ TEST(InMemoryStorageEngineTest, AddGeneratedRecordAssignsIdAndTimestamp) {
 }
 
 TEST(InMemoryStorageEngineTest, ListGeneratedRecordsSortedByCreatedAtDesc) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto a1 = engine.add_generated_record(make_gen_record("first", 5));
     ASSERT_TRUE(a1.ok());
     // 睡 1s 让 created_at 不同，避免出现相同时间戳
@@ -410,7 +411,7 @@ TEST(InMemoryStorageEngineTest, ListGeneratedRecordsSortedByCreatedAtDesc) {
 }
 
 TEST(InMemoryStorageEngineTest, RemoveGeneratedRecordById) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto added = engine.add_generated_record(make_gen_record("to-delete", 11));
     ASSERT_TRUE(added.ok());
     const int64_t id = added.value().id;
@@ -423,7 +424,7 @@ TEST(InMemoryStorageEngineTest, RemoveGeneratedRecordById) {
 }
 
 TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordPreservesCreatedAt) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto added = engine.add_generated_record(make_gen_record("plain-pwd", 10));
     ASSERT_TRUE(added.ok()) << added.error().what();
     const int64_t id = added.value().id;
@@ -431,11 +432,11 @@ TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordPreservesCreatedAt) {
     ASSERT_GT(original_ts, 0);
 
     // 模拟 enable_program_password 重加密：仅改 password/iv/tag，保留 id 与 created_at
-    pwdvault::core::GeneratedPasswordRecord updated = added.value();
+    yuli::vault::core::GeneratedPasswordRecord updated = added.value();
     updated.password = "cipher-blob";
     updated.length = 10;
-    updated.iv = pwdvault::core::ByteVec(12, pwdvault::core::ByteVec::value_type{0xAA});
-    updated.tag = pwdvault::core::ByteVec(16, pwdvault::core::ByteVec::value_type{0xBB});
+    updated.iv = yuli::vault::core::ByteVec(12, yuli::vault::core::ByteVec::value_type{0xAA});
+    updated.tag = yuli::vault::core::ByteVec(16, yuli::vault::core::ByteVec::value_type{0xBB});
 
     auto upd = engine.update_generated_record(updated);
     ASSERT_TRUE(upd.ok()) << upd.error().what();
@@ -456,18 +457,18 @@ TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordPreservesCreatedAt) {
 }
 
 TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordNotFound) {
-    pwdvault::storage::InMemoryStorageEngine engine;
-    pwdvault::core::GeneratedPasswordRecord r;
+    yuli::vault::storage::InMemoryStorageEngine engine;
+    yuli::vault::core::GeneratedPasswordRecord r;
     r.id = 9999;  // 不存在的 id
     r.password = "x";
     r.length = 1;
     auto upd = engine.update_generated_record(r);
     ASSERT_FALSE(upd.ok());
-    EXPECT_EQ(upd.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(upd.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordRejectsZeroId) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto added = engine.add_generated_record(make_gen_record("ok", 2));
     ASSERT_TRUE(added.ok());
 
@@ -475,18 +476,18 @@ TEST(InMemoryStorageEngineTest, UpdateGeneratedRecordRejectsZeroId) {
     r.id = 0;  // 显式置 0
     auto upd = engine.update_generated_record(r);
     ASSERT_FALSE(upd.ok());
-    EXPECT_EQ(upd.error().code, pwdvault::core::ErrorCode::InvalidArgument);
+    EXPECT_EQ(upd.error().code, yuli::vault::core::ErrorCode::InvalidArgument);
 }
 
 TEST(InMemoryStorageEngineTest, RemoveGeneratedRecordNotFound) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto err = engine.remove_generated_record(9999);
     ASSERT_FALSE(err.ok());
-    EXPECT_EQ(err.code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(err.code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(InMemoryStorageEngineTest, ClearGeneratedRecordsRemovesAll) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     engine.add_generated_record(make_gen_record("a", 1));
     engine.add_generated_record(make_gen_record("b", 2));
     engine.add_generated_record(make_gen_record("c", 3));
@@ -506,7 +507,7 @@ TEST(InMemoryStorageEngineTest, ClearGeneratedRecordsRemovesAll) {
 // ===========================================================================
 
 TEST(InMemoryStorageEngineTest, SetAndGetSettingRoundTrip) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     EXPECT_TRUE(engine.set_setting("generator.history_limit", "20").ok());
     auto v = engine.get_setting("generator.history_limit");
     ASSERT_TRUE(v.ok());
@@ -514,14 +515,14 @@ TEST(InMemoryStorageEngineTest, SetAndGetSettingRoundTrip) {
 }
 
 TEST(InMemoryStorageEngineTest, GetSettingMissingKeyReturnsEmpty) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     auto v = engine.get_setting("nonexistent.key");
     ASSERT_TRUE(v.ok());
     EXPECT_TRUE(v->empty());
 }
 
 TEST(InMemoryStorageEngineTest, SetSettingOverwritesExistingValue) {
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     engine.set_setting("generator.history_limit", "10");
     engine.set_setting("generator.history_limit", "50");
     auto v = engine.get_setting("generator.history_limit");
@@ -531,7 +532,7 @@ TEST(InMemoryStorageEngineTest, SetSettingOverwritesExistingValue) {
 
 TEST(InMemoryStorageEngineTest, SetSettingEmptyValueDeletesKey) {
     // 空值在 InMemory / SQLite 实现中均视为删除
-    pwdvault::storage::InMemoryStorageEngine engine;
+    yuli::vault::storage::InMemoryStorageEngine engine;
     engine.set_setting("generator.history_limit", "20");
     engine.set_setting("generator.history_limit", "");
     auto v = engine.get_setting("generator.history_limit");
@@ -544,13 +545,13 @@ TEST(InMemoryStorageEngineTest, SetSettingEmptyValueDeletesKey) {
 // ===========================================================================
 
 TEST(StorageEngineSqliteTest, GeneratedRecordRoundTripSqlite) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
-    pwdvault::core::GeneratedPasswordRecord r;
+    yuli::vault::core::GeneratedPasswordRecord r;
     r.password = std::string("enc\0data", 8);  // 含 0 字节，验证 BLOB 安全
     r.length = 8;
-    r.iv = pwdvault::core::ByteVec(12, pwdvault::core::ByteVec::value_type{0xAA});
-    r.tag = pwdvault::core::ByteVec(16, pwdvault::core::ByteVec::value_type{0xBB});
+    r.iv = yuli::vault::core::ByteVec(12, yuli::vault::core::ByteVec::value_type{0xAA});
+    r.tag = yuli::vault::core::ByteVec(16, yuli::vault::core::ByteVec::value_type{0xBB});
 
     auto added = engine.add_generated_record(r);
     ASSERT_TRUE(added.ok()) << added.error().what();
@@ -569,7 +570,7 @@ TEST(StorageEngineSqliteTest, GeneratedRecordRoundTripSqlite) {
 }
 
 TEST(StorageEngineSqliteTest, GeneratedRecordRemoveAndClearSqlite) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
     auto a1 = engine.add_generated_record(make_gen_record("p1", 2));
     auto a2 = engine.add_generated_record(make_gen_record("p2", 2));
@@ -590,9 +591,9 @@ TEST(StorageEngineSqliteTest, GeneratedRecordRemoveAndClearSqlite) {
 }
 
 TEST(StorageEngineSqliteTest, GeneratedRecordUpdatePreservesCreatedAtSqlite) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
-    pwdvault::core::GeneratedPasswordRecord r;
+    yuli::vault::core::GeneratedPasswordRecord r;
     r.password = "plain-pwd";
     r.length = 9;
     // 明文模式 iv/tag 为空
@@ -603,10 +604,10 @@ TEST(StorageEngineSqliteTest, GeneratedRecordUpdatePreservesCreatedAtSqlite) {
     ASSERT_GT(original_ts, 0);
 
     // 模拟 enable_program_password 重加密：password/iv/tag 全变，length 不变
-    pwdvault::core::GeneratedPasswordRecord updated = added.value();
+    yuli::vault::core::GeneratedPasswordRecord updated = added.value();
     updated.password = std::string("enc\0blob", 8);  // 含 0 字节验证 BLOB 安全
-    updated.iv = pwdvault::core::ByteVec(12, pwdvault::core::ByteVec::value_type{0xAA});
-    updated.tag = pwdvault::core::ByteVec(16, pwdvault::core::ByteVec::value_type{0xBB});
+    updated.iv = yuli::vault::core::ByteVec(12, yuli::vault::core::ByteVec::value_type{0xAA});
+    updated.tag = yuli::vault::core::ByteVec(16, yuli::vault::core::ByteVec::value_type{0xBB});
 
     auto upd = engine.update_generated_record(updated);
     ASSERT_TRUE(upd.ok()) << upd.error().what();
@@ -628,18 +629,18 @@ TEST(StorageEngineSqliteTest, GeneratedRecordUpdatePreservesCreatedAtSqlite) {
 }
 
 TEST(StorageEngineSqliteTest, GeneratedRecordUpdateNotFoundSqlite) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
-    pwdvault::core::GeneratedPasswordRecord r;
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::core::GeneratedPasswordRecord r;
     r.id = 4242;  // 不存在
     r.password = "x";
     r.length = 1;
     auto upd = engine.update_generated_record(r);
     ASSERT_FALSE(upd.ok());
-    EXPECT_EQ(upd.error().code, pwdvault::core::ErrorCode::NotFound);
+    EXPECT_EQ(upd.error().code, yuli::vault::core::ErrorCode::NotFound);
 }
 
 TEST(StorageEngineSqliteTest, SettingsKvSqliteRoundTrip) {
-    pwdvault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
 
     EXPECT_TRUE(engine.set_setting("generator.history_limit", "100").ok());
     auto v = engine.get_setting("generator.history_limit");
@@ -658,3 +659,40 @@ TEST(StorageEngineSqliteTest, SettingsKvSqliteRoundTrip) {
     ASSERT_TRUE(v3.ok());
     EXPECT_TRUE(v3->empty());
 }
+
+TEST(StorageEngineSqliteTest, SchemaVersionIs3OnFreshDatabase) {
+    yuli::vault::storage::StorageEngine engine(std::filesystem::path{":memory:"});
+    EXPECT_EQ(engine.schema_version(), 3);
+}
+
+TEST(InMemoryStorageEngineTest, SchemaVersionIs3AndMigrateIsNoop) {
+    yuli::vault::storage::InMemoryStorageEngine engine;
+    EXPECT_EQ(engine.schema_version(), 3);
+    auto err = engine.migrate_v2_to_v3([](yuli::vault::core::VaultItem row) {
+        return yuli::vault::core::Result<yuli::vault::core::VaultItem>::Ok(std::move(row));
+    });
+    EXPECT_TRUE(err.ok()) << err.what();
+}
+
+TEST(VaultPayloadTest, EncodeDecodeRoundTrip) {
+    yuli::vault::core::VaultItem item;
+    item.type = yuli::vault::core::VaultItemType::Login;
+    item.title = "GitHub";
+    item.account = "alice";
+    item.username = "Alice";
+    item.password = "s3cret";
+    item.website = "github.com";
+    item.note = "work";
+    const auto blob = yuli::vault::core::encode_item_payload(item);
+    yuli::vault::core::VaultItem out;
+    out.title = "GitHub";
+    ASSERT_TRUE(yuli::vault::core::decode_item_payload(out, blob).ok());
+    EXPECT_EQ(out.type, item.type);
+    EXPECT_EQ(out.account, item.account);
+    EXPECT_EQ(out.username, item.username);
+    EXPECT_EQ(out.password, item.password);
+    EXPECT_EQ(out.website, item.website);
+    EXPECT_EQ(out.note, item.note);
+    EXPECT_EQ(out.title, "GitHub");
+}
+

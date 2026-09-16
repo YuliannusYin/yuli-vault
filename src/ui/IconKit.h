@@ -6,7 +6,7 @@
 //
 // 背景：项目 SVG 图标用 Lucide 风格 stroke="currentColor"，但 Qt 的
 // QSvgRenderer 不支持 CSS currentColor 关键字，会 fallback 到黑色，导致
-// 图标无法随主题/状态变色。
+// 图标无法随Theme/状态变色。
 //
 // 方案：自定义 QIconEngine 按需着色渲染。engine 在 paint()/pixmap() 时
 // 实时用 QSvgRenderer 渲染 SVG 到请求尺寸，再用 SourceIn 着色。这样：
@@ -18,9 +18,9 @@
 //   btn->setIcon(tinted_icon(":/icons/lock.svg", IconRole::Normal));
 //   btn->setIconSize(QSize(18, 18));
 //   lbl->setPixmap(tinted_pixmap(":/icons/lock.svg", IconRole::Normal, QSize(18,18)));
-//   // 主题切换 / 状态变化后重新调用以刷新颜色
+//   // Theme切换 / 状态变化后重新调用以Refresh颜色
 //
-// 颜色由 IconRole 语义角色决定，具体色值随当前主题（dark/light）推导。
+// 颜色由 IconRole 语义角色决定，具体色值随当前Theme（dark/light）推导。
 // =============================================================================
 #pragma once
 
@@ -32,20 +32,20 @@
 
 class QPushButton;
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 /// 图标语义角色：决定图标渲染颜色。
-/// 颜色值由当前主题（dark/light）推导，主题切换后需重新着色。
+/// 颜色值由当前Theme（dark/light）推导，Theme切换后需重新着色。
 enum class IconRole {
-    Normal,     ///< 常态：次要色（导航未选中、普通图标按钮、输入框内联图标）
-    Active,     ///< 激活/选中：主文字色（导航选中项）
+    Normal,     ///< 常态：次要色（导航未选Medium、普通图标按钮、输入框内联图标）
+    Active,     ///< 激活/选Medium：主文字色（导航选Medium项）
     OnPrimary,  ///< 位于 primary 按钮上：白色
     Danger,     ///< 危险动作：红色
-    Success,    ///< 成功：绿色（安全区 section 图标等）
-    Info,       ///< 信息：蓝色（生成器 section 图标等）
+    Success,    ///< Success：绿色（Security区 section 图标等）
+    Info,       ///< 信息：蓝色（Generator section 图标等）
 };
 
-/// 获取当前主题下指定角色的颜色（依赖 Theme::is_dark()）。
+/// 获取当前Theme下指定角色的颜色（依赖 Theme::is_dark()）。
 QColor icon_color(IconRole role);
 
 /// 按需着色渲染 pixmap（用于 QLabel::setPixmap 等需要 QPixmap 的场景）。
@@ -62,9 +62,9 @@ QIcon tinted_icon(const QString& svg_path, const QColor& color);
 /// 便捷：按角色着色 QIcon。
 QIcon tinted_icon(const QString& svg_path, IconRole role);
 
-/// 将文本复制到剪贴板，并在 30 秒后自动清空。
-/// 用于密码等敏感数据，避免明文长期留存剪贴板被其他程序读取。
-/// 多次调用会重置计时器，不会提前清空后续复制的内容。
+/// 将文本Copy到剪贴板，并在 30 秒后自动清空。
+/// 用于Password等敏感数据，避免明文长期留存剪贴板被其他程序读取。
+/// 多次调用会重置计时器，不会提前清空后续Copy的内容。
 void copy_secure_to_clipboard(const QString& text);
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

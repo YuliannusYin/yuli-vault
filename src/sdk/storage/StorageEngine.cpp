@@ -8,15 +8,19 @@
 // =============================================================================
 #include "StorageEngine.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <sqlite3.h>
 
-namespace pwdvault::storage {
+#include "VaultPayload.h"
+
+namespace yuli::vault::storage {
 
 namespace {
 
@@ -155,8 +159,60 @@ core::Error StorageEngine::exec_sql(const char* sql) {
     return core::Error{};
 }
 
+core::Error StorageEngine::write_schema_version(int version) {
+    const char* kUpsert = R"SQL(
+        INSERT INTO settings (key, value) VALUES ('schema_version', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+    )SQL";
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db_.get(), kUpsert, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        return make_storage_error("write_schema_version: prepare", db_.get());
+    }
+    StmtHandle sp(stmt);
+    const std::string v = std::to_string(version);
+    sqlite3_bind_text(sp.get(), 1, v.c_str(), -1, SQLITE_TRANSIENT);
+    rc = sqlite3_step(sp.get());
+    if (rc != SQLITE_DONE) {
+        return rc_to_error(rc, "write_schema_version: step", db_.get());
+    }
+    schema_version_ = version;
+    return core::Error{};
+}
+
+core::Error StorageEngine::create_v3_item_tables() {
+    core::Error err = exec_sql(R"SQL(
+        CREATE TABLE IF NOT EXISTS vault_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            type        INTEGER NOT NULL,
+            title       TEXT NOT NULL,
+            payload     BLOB NOT NULL,
+            iv          BLOB NOT NULL,
+            tag         BLOB NOT NULL,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+    )SQL");
+    if (!err.ok()) return err;
+    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_vault_items_title ON vault_items(title);");
+    if (!err.ok()) return err;
+    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_vault_items_type ON vault_items(type);");
+    if (!err.ok()) return err;
+
+    err = exec_sql(R"SQL(
+        CREATE TABLE IF NOT EXISTS entry_tags (
+            entry_id    INTEGER NOT NULL,
+            tag_id      INTEGER NOT NULL,
+            PRIMARY KEY (entry_id, tag_id),
+            FOREIGN KEY (entry_id) REFERENCES vault_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id)   REFERENCES tags(id) ON DELETE CASCADE
+        );
+    )SQL");
+    if (!err.ok()) return err;
+    return exec_sql("CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);");
+}
+
 core::Error StorageEngine::init_schema() {
-    // 1. 确保 settings 表存在，再读 schema_version 决定是否需要重建。
     core::Error err = exec_sql(
         "CREATE TABLE IF NOT EXISTS settings ("
         "  key   TEXT PRIMARY KEY,"
@@ -164,10 +220,8 @@ core::Error StorageEngine::init_schema() {
         ");");
     if (!err.ok()) return err;
 
-    // 读取旧版本号（不存在时为空字符串）
     std::string current_version;
     {
-        // 直接走 exec 后用 prepared 读，避免重复实现
         sqlite3_stmt* probe = nullptr;
         int rc = sqlite3_prepare_v2(db_.get(),
             "SELECT value FROM settings WHERE key='schema_version';",
@@ -181,45 +235,15 @@ core::Error StorageEngine::init_schema() {
         }
     }
 
-    // 当前目标版本。空（全新库）或小于 2 时，按 v2 schema 重建。
-    constexpr const char* kTargetVersion = "2";
-    if (current_version != kTargetVersion) {
-        // 清空旧表（按用户决策：不迁移历史数据，清空重建）
-        // generated_passwords 表保持不变（生成器历史记录不涉及本次重构）
-        err = exec_sql("DROP TABLE IF EXISTS entry_tags;");
-        if (!err.ok()) return err;
-        err = exec_sql("DROP TABLE IF EXISTS tags;");
-        if (!err.ok()) return err;
-        err = exec_sql("DROP TABLE IF EXISTS passwords;");
-        if (!err.ok()) return err;
+    int parsed = 0;
+    if (!current_version.empty()) {
+        try {
+            parsed = std::stoi(current_version);
+        } catch (...) {
+            parsed = 0;
+        }
     }
 
-    // passwords 表（v2 schema）
-    const char* kCreateTable = R"SQL(
-        CREATE TABLE IF NOT EXISTS passwords (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_name  TEXT NOT NULL,
-            account     TEXT NOT NULL,
-            username    TEXT,
-            password    BLOB NOT NULL,
-            website     TEXT,
-            note        TEXT,
-            iv          BLOB NOT NULL,
-            tag         BLOB NOT NULL,
-            created_at  INTEGER NOT NULL,
-            updated_at  INTEGER NOT NULL
-        );
-    )SQL";
-    err = exec_sql(kCreateTable);
-    if (!err.ok()) return err;
-    err = exec_sql(
-        "CREATE INDEX IF NOT EXISTS idx_passwords_entry_name ON passwords(entry_name);");
-    if (!err.ok()) return err;
-    err = exec_sql(
-        "CREATE INDEX IF NOT EXISTS idx_passwords_account ON passwords(account);");
-    if (!err.ok()) return err;
-
-    // tags 表
     const char* kCreateTagsTable = R"SQL(
         CREATE TABLE IF NOT EXISTS tags (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -234,26 +258,6 @@ core::Error StorageEngine::init_schema() {
     err = exec_sql("CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);");
     if (!err.ok()) return err;
 
-    // entry_tags 关联表
-    const char* kCreateEntryTags = R"SQL(
-        CREATE TABLE IF NOT EXISTS entry_tags (
-            entry_id    INTEGER NOT NULL,
-            tag_id      INTEGER NOT NULL,
-            PRIMARY KEY (entry_id, tag_id),
-            FOREIGN KEY (entry_id) REFERENCES passwords(id) ON DELETE CASCADE,
-            FOREIGN KEY (tag_id)   REFERENCES tags(id)       ON DELETE CASCADE
-        );
-    )SQL";
-    err = exec_sql(kCreateEntryTags);
-    if (!err.ok()) return err;
-    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);");
-    if (!err.ok()) return err;
-
-    // 启用外键约束（ON DELETE CASCADE 依赖此开关）
-    err = exec_sql("PRAGMA foreign_keys = ON;");
-    if (!err.ok()) return err;
-
-    // 生成器历史记录表（保持不变）
     const char* kCreateGenTable = R"SQL(
         CREATE TABLE IF NOT EXISTS generated_passwords (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -270,25 +274,43 @@ core::Error StorageEngine::init_schema() {
         "CREATE INDEX IF NOT EXISTS idx_genpw_created_at ON generated_passwords(created_at);");
     if (!err.ok()) return err;
 
-    // 写入 schema_version（UPSERT）
+    err = exec_sql("PRAGMA foreign_keys = ON;");
+    if (!err.ok()) return err;
+
+    if (parsed >= 3) {
+        err = create_v3_item_tables();
+        if (!err.ok()) return err;
+        schema_version_ = 3;
+        return core::Error{};
+    }
+
+    if (parsed == 2) {
+        // Keep legacy passwords + entry_tags until ServiceCore migrates after unlock.
+        schema_version_ = 2;
+        return core::Error{};
+    }
+
+    // Fresh database (or pre-v2): create v3 objects. Do not DROP user data if a
+    // passwords table already exists — treat that as v2 and wait for migrate.
     {
-        const char* kUpsert = R"SQL(
-            INSERT INTO settings (key, value) VALUES ('schema_version', ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-        )SQL";
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_.get(), kUpsert, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
-            return make_storage_error("init_schema: upsert schema_version prepare", db_.get());
+        sqlite3_stmt* probe = nullptr;
+        int rc = sqlite3_prepare_v2(db_.get(),
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='passwords';",
+            -1, &probe, nullptr);
+        bool has_passwords = false;
+        if (rc == SQLITE_OK && probe != nullptr) {
+            StmtHandle sp(probe);
+            has_passwords = sqlite3_step(sp.get()) == SQLITE_ROW;
         }
-        StmtHandle sp(stmt);
-        sqlite3_bind_text(sp.get(), 1, kTargetVersion, -1, SQLITE_TRANSIENT);
-        rc = sqlite3_step(sp.get());
-        if (rc != SQLITE_DONE) {
-            return rc_to_error(rc, "init_schema: upsert schema_version step", db_.get());
+        if (has_passwords) {
+            schema_version_ = 2;
+            return write_schema_version(2);
         }
     }
-    return core::Error{};
+
+    err = create_v3_item_tables();
+    if (!err.ok()) return err;
+    return write_schema_version(3);
 }
 
 core::ByteVec StorageEngine::read_blob_column(sqlite3_stmt* stmt, int col) {
@@ -301,15 +323,32 @@ core::ByteVec StorageEngine::read_blob_column(sqlite3_stmt* stmt, int col) {
     return core::ByteVec(byte_ptr, byte_ptr + static_cast<size_t>(bytes));
 }
 
-core::PasswordEntry StorageEngine::read_row(sqlite3_stmt* stmt) {
-    // 列顺序（与各 SELECT 保持一致）：
-    //   0 id, 1 entry_name, 2 account, 3 username, 4 password,
-    //   5 website, 6 note, 7 iv, 8 tag, 9 created_at, 10 updated_at
+core::PasswordEntry StorageEngine::read_v3_row(sqlite3_stmt* stmt) {
+    // 0 id, 1 type, 2 title, 3 payload, 4 iv, 5 tag, 6 created_at, 7 updated_at
     core::PasswordEntry e;
     e.id = sqlite3_column_int64(stmt, 0);
+    e.type = static_cast<core::VaultItemType>(
+        static_cast<uint8_t>(sqlite3_column_int(stmt, 1)));
+    if (const unsigned char* v = sqlite3_column_text(stmt, 2)) {
+        e.title.assign(reinterpret_cast<const char*>(v));
+    }
+    e.payload = read_blob_column(stmt, 3);
+    e.iv = read_blob_column(stmt, 4);
+    e.tag = read_blob_column(stmt, 5);
+    e.created_at = sqlite3_column_int64(stmt, 6);
+    e.updated_at = sqlite3_column_int64(stmt, 7);
+    (void)core::try_decode_item_payload(e, e.payload);
+    return e;
+}
 
+core::PasswordEntry StorageEngine::read_v2_row(sqlite3_stmt* stmt) {
+    // 0 id, 1 entry_name, 2 account, 3 username, 4 password,
+    // 5 website, 6 note, 7 iv, 8 tag, 9 created_at, 10 updated_at
+    core::PasswordEntry e;
+    e.type = core::VaultItemType::Login;
+    e.id = sqlite3_column_int64(stmt, 0);
     if (const unsigned char* v = sqlite3_column_text(stmt, 1)) {
-        e.entry_name.assign(reinterpret_cast<const char*>(v));
+        e.title.assign(reinterpret_cast<const char*>(v));
     }
     if (const unsigned char* v = sqlite3_column_text(stmt, 2)) {
         e.account.assign(reinterpret_cast<const char*>(v));
@@ -317,7 +356,6 @@ core::PasswordEntry StorageEngine::read_row(sqlite3_stmt* stmt) {
     if (const unsigned char* v = sqlite3_column_text(stmt, 3)) {
         e.username.assign(reinterpret_cast<const char*>(v));
     }
-    // password 字段为已加密的二进制；存为 std::string 的字节序列。
     if (const void* v = sqlite3_column_blob(stmt, 4)) {
         int n = sqlite3_column_bytes(stmt, 4);
         e.password.assign(static_cast<const char*>(v), static_cast<size_t>(n));
@@ -333,6 +371,25 @@ core::PasswordEntry StorageEngine::read_row(sqlite3_stmt* stmt) {
     e.created_at = sqlite3_column_int64(stmt, 9);
     e.updated_at = sqlite3_column_int64(stmt, 10);
     return e;
+}
+
+core::PasswordEntry StorageEngine::read_row(sqlite3_stmt* stmt) const {
+    if (schema_version_ >= 3) {
+        return read_v3_row(stmt);
+    }
+    return read_v2_row(stmt);
+}
+
+core::ByteVec StorageEngine::payload_for_store(const core::VaultItem& entry) const {
+    if (!entry.payload.empty()) {
+        return entry.payload;
+    }
+    return core::encode_item_payload(entry);
+}
+
+int StorageEngine::schema_version() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return schema_version_;
 }
 
 core::Tag StorageEngine::read_tag_row(sqlite3_stmt* stmt) {
@@ -366,12 +423,16 @@ core::Result<core::PasswordEntry> StorageEngine::add_entry(
         return core::Result<core::PasswordEntry>::Err(
             core::Error(core::ErrorCode::StorageError, "database not opened"));
     }
+    if (schema_version_ < 3) {
+        return core::Result<core::PasswordEntry>::Err(
+            core::Error(core::ErrorCode::StorageError,
+                        "add_entry: schema v2 requires migrate_v2_to_v3"));
+    }
 
     const char* kSql = R"SQL(
-        INSERT INTO passwords
-            (entry_name, account, username, password, website, note,
-             iv, tag, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO vault_items
+            (type, title, payload, iv, tag, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
     )SQL";
 
     sqlite3_stmt* raw_stmt = nullptr;
@@ -382,36 +443,16 @@ core::Result<core::PasswordEntry> StorageEngine::add_entry(
     }
     StmtHandle stmt(raw_stmt);
 
-    sqlite3_bind_text(stmt.get(), 1, entry.entry_name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt.get(), 2, entry.account.c_str(), -1, SQLITE_TRANSIENT);
-    // username 可空
-    if (entry.username.empty()) {
-        sqlite3_bind_null(stmt.get(), 3);
-    } else {
-        sqlite3_bind_text(stmt.get(), 3, entry.username.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    bind_blob_safe(stmt.get(), 4, entry.password.data(),
-                   static_cast<int>(entry.password.size()));
-    // website 可空
-    if (entry.website.empty()) {
-        sqlite3_bind_null(stmt.get(), 5);
-    } else {
-        sqlite3_bind_text(stmt.get(), 5, entry.website.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    // note 可空
-    if (entry.note.empty()) {
-        sqlite3_bind_null(stmt.get(), 6);
-    } else {
-        sqlite3_bind_text(stmt.get(), 6, entry.note.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    bind_blob_safe(stmt.get(), 7, entry.iv.data(),
-                   static_cast<int>(entry.iv.size()));
-    bind_blob_safe(stmt.get(), 8, entry.tag.data(),
-                   static_cast<int>(entry.tag.size()));
+    const core::ByteVec payload = payload_for_store(entry);
+    sqlite3_bind_int(stmt.get(), 1, static_cast<int>(entry.type));
+    sqlite3_bind_text(stmt.get(), 2, entry.title.c_str(), -1, SQLITE_TRANSIENT);
+    bind_blob_safe(stmt.get(), 3, payload.data(), static_cast<int>(payload.size()));
+    bind_blob_safe(stmt.get(), 4, entry.iv.data(), static_cast<int>(entry.iv.size()));
+    bind_blob_safe(stmt.get(), 5, entry.tag.data(), static_cast<int>(entry.tag.size()));
 
     const int64_t ts = now_seconds();
-    sqlite3_bind_int64(stmt.get(), 9, ts);
-    sqlite3_bind_int64(stmt.get(), 10, ts);
+    sqlite3_bind_int64(stmt.get(), 6, ts);
+    sqlite3_bind_int64(stmt.get(), 7, ts);
 
     rc = sqlite3_step(stmt.get());
     if (rc != SQLITE_DONE) {
@@ -453,13 +494,10 @@ core::Result<core::PasswordEntry> StorageEngine::update_entry(
     }
 
     const char* kSql = R"SQL(
-        UPDATE passwords SET
-            entry_name  = ?,
-            account     = ?,
-            username    = ?,
-            password    = ?,
-            website     = ?,
-            note        = ?,
+        UPDATE vault_items SET
+            type        = ?,
+            title       = ?,
+            payload     = ?,
             iv          = ?,
             tag         = ?,
             updated_at  = ?
@@ -474,32 +512,15 @@ core::Result<core::PasswordEntry> StorageEngine::update_entry(
     }
     StmtHandle stmt(raw_stmt);
 
-    sqlite3_bind_text(stmt.get(), 1, entry.entry_name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt.get(), 2, entry.account.c_str(), -1, SQLITE_TRANSIENT);
-    if (entry.username.empty()) {
-        sqlite3_bind_null(stmt.get(), 3);
-    } else {
-        sqlite3_bind_text(stmt.get(), 3, entry.username.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    bind_blob_safe(stmt.get(), 4, entry.password.data(),
-                   static_cast<int>(entry.password.size()));
-    if (entry.website.empty()) {
-        sqlite3_bind_null(stmt.get(), 5);
-    } else {
-        sqlite3_bind_text(stmt.get(), 5, entry.website.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    if (entry.note.empty()) {
-        sqlite3_bind_null(stmt.get(), 6);
-    } else {
-        sqlite3_bind_text(stmt.get(), 6, entry.note.c_str(), -1, SQLITE_TRANSIENT);
-    }
-    bind_blob_safe(stmt.get(), 7, entry.iv.data(),
-                   static_cast<int>(entry.iv.size()));
-    bind_blob_safe(stmt.get(), 8, entry.tag.data(),
-                   static_cast<int>(entry.tag.size()));
+    const core::ByteVec payload = payload_for_store(entry);
+    sqlite3_bind_int(stmt.get(), 1, static_cast<int>(entry.type));
+    sqlite3_bind_text(stmt.get(), 2, entry.title.c_str(), -1, SQLITE_TRANSIENT);
+    bind_blob_safe(stmt.get(), 3, payload.data(), static_cast<int>(payload.size()));
+    bind_blob_safe(stmt.get(), 4, entry.iv.data(), static_cast<int>(entry.iv.size()));
+    bind_blob_safe(stmt.get(), 5, entry.tag.data(), static_cast<int>(entry.tag.size()));
     const int64_t ts = now_seconds();
-    sqlite3_bind_int64(stmt.get(), 9, ts);
-    sqlite3_bind_int64(stmt.get(), 10, entry.id);
+    sqlite3_bind_int64(stmt.get(), 6, ts);
+    sqlite3_bind_int64(stmt.get(), 7, entry.id);
 
     rc = sqlite3_step(stmt.get());
     if (rc != SQLITE_DONE) {
@@ -538,7 +559,7 @@ core::Error StorageEngine::remove_entry(int64_t id) {
         return core::Error(core::ErrorCode::StorageError, "database not opened");
     }
 
-    const char* kSql = "DELETE FROM passwords WHERE id = ?;";
+    const char* kSql = "DELETE FROM vault_items WHERE id = ?;";
     sqlite3_stmt* raw_stmt = nullptr;
     int rc = sqlite3_prepare_v2(db_.get(), kSql, -1, &raw_stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -566,9 +587,8 @@ core::Result<core::PasswordEntry> StorageEngine::get_entry(int64_t id) {
     }
 
     const char* kSql = R"SQL(
-        SELECT id, entry_name, account, username, password, website, note,
-               iv, tag, created_at, updated_at
-        FROM passwords WHERE id = ?;
+        SELECT id, type, title, payload, iv, tag, created_at, updated_at
+        FROM vault_items WHERE id = ?;
     )SQL";
     sqlite3_stmt* raw_stmt = nullptr;
     int rc = sqlite3_prepare_v2(db_.get(), kSql, -1, &raw_stmt, nullptr);
@@ -601,53 +621,12 @@ core::Result<std::vector<core::PasswordEntry>> StorageEngine::search_entries(
             core::Error(core::ErrorCode::StorageError, "database not opened"));
     }
 
-    // 字段白名单：password 是 BLOB，不参与搜索（密文搜索无意义）。
-    // 字段名经白名单校验后直接拼入 SQL，杜绝注入。
-    auto is_searchable_field = [](const std::string& f) {
-        return f == "entry_name" || f == "account" || f == "username" ||
-               f == "website" || f == "note";
-    };
-
-    std::vector<std::string> fields;
-    if (query.fields.empty()) {
-        fields = {"entry_name", "account", "username", "website", "note"};
-    } else {
-        for (const auto& f : query.fields) {
-            if (is_searchable_field(f)) {
-                fields.push_back(f);
-            }
-        }
-    }
-
-    // 文本与标签两个过滤维度以 AND 组合：
-    //   - 文本：fields 中任一字段子串匹配（OR）
-    //   - 标签：entry_id 在 entry_tags 中匹配 tag_ids 任一（OR）
-    // 二者同时存在时取交集（AND）。
     std::ostringstream sql;
-    sql << "SELECT id, entry_name, account, username, password, website, note, "
-           "iv, tag, created_at, updated_at FROM passwords";
-    bool has_text_clause = !fields.empty() && !query.text.empty();
-    bool has_tag_clause = !query.tag_ids.empty();
-    bool needs_where = has_text_clause || has_tag_clause;
-    if (needs_where) sql << " WHERE ";
-
-    bool need_and = false;
-    if (has_text_clause) {
-        sql << "(";
-        for (size_t i = 0; i < fields.size(); ++i) {
-            if (i > 0) sql << " OR ";
-            if (query.case_sensitive) {
-                sql << fields[i] << " GLOB ?";
-            } else {
-                sql << fields[i] << " LIKE ? ESCAPE '\\'";
-            }
-        }
-        sql << ")";
-        need_and = true;
-    }
+    sql << "SELECT id, type, title, payload, iv, tag, created_at, updated_at "
+           "FROM vault_items";
+    const bool has_tag_clause = !query.tag_ids.empty();
     if (has_tag_clause) {
-        if (need_and) sql << " AND ";
-        sql << "id IN (SELECT entry_id FROM entry_tags WHERE tag_id IN (";
+        sql << " WHERE id IN (SELECT entry_id FROM entry_tags WHERE tag_id IN (";
         for (size_t i = 0; i < query.tag_ids.size(); ++i) {
             if (i > 0) sql << ",";
             sql << "?";
@@ -666,17 +645,6 @@ core::Result<std::vector<core::PasswordEntry>> StorageEngine::search_entries(
     StmtHandle stmt(raw_stmt);
 
     int bind_idx = 1;
-    // 绑定文本匹配模式
-    if (has_text_clause) {
-        for (size_t i = 0; i < fields.size(); ++i) {
-            std::string pattern = query.case_sensitive
-                                      ? escape_glob_pattern(query.text)
-                                      : escape_like_pattern(query.text);
-            sqlite3_bind_text(stmt.get(), bind_idx++,
-                              pattern.c_str(), -1, SQLITE_TRANSIENT);
-        }
-    }
-    // 绑定 tag_ids
     if (has_tag_clause) {
         for (auto tid : query.tag_ids) {
             sqlite3_bind_int64(stmt.get(), bind_idx++, tid);
@@ -689,7 +657,9 @@ core::Result<std::vector<core::PasswordEntry>> StorageEngine::search_entries(
         if (rc == SQLITE_ROW) {
             core::PasswordEntry e = read_row(stmt.get());
             fill_entry_tags_unlocked(e);
-            results.push_back(std::move(e));
+            if (core::item_matches_text_query(e, query)) {
+                results.push_back(std::move(e));
+            }
         } else if (rc == SQLITE_DONE) {
             break;
         } else {
@@ -708,9 +678,8 @@ core::Result<std::vector<core::PasswordEntry>> StorageEngine::list_entries() {
     }
 
     const char* kSql = R"SQL(
-        SELECT id, entry_name, account, username, password, website, note,
-               iv, tag, created_at, updated_at
-        FROM passwords ORDER BY created_at DESC;
+        SELECT id, type, title, payload, iv, tag, created_at, updated_at
+        FROM vault_items ORDER BY created_at DESC;
     )SQL";
     sqlite3_stmt* raw_stmt = nullptr;
     int rc = sqlite3_prepare_v2(db_.get(), kSql, -1, &raw_stmt, nullptr);
@@ -1356,4 +1325,150 @@ core::Error StorageEngine::set_entry_tags(int64_t entry_id,
     return set_entry_tags_unlocked(entry_id, tag_ids);
 }
 
-}  // namespace pwdvault::storage
+core::Error StorageEngine::migrate_v2_to_v3(
+    const std::function<core::Result<core::VaultItem>(core::VaultItem)>& rewrap) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (db_ == nullptr) {
+        return core::Error(core::ErrorCode::StorageError, "database not opened");
+    }
+    if (schema_version_ >= 3) {
+        return core::Error{};
+    }
+
+    // foreign_keys cannot be toggled inside a transaction.
+    core::Error err = exec_sql("PRAGMA foreign_keys = OFF;");
+    if (!err.ok()) return err;
+
+    err = exec_sql("BEGIN IMMEDIATE;");
+    if (!err.ok()) {
+        (void)exec_sql("PRAGMA foreign_keys = ON;");
+        return err;
+    }
+
+    auto abort_migrate = [this](core::Error e) {
+        (void)exec_sql("ROLLBACK;");
+        (void)exec_sql("PRAGMA foreign_keys = ON;");
+        schema_version_ = 2;
+        return e;
+    };
+
+    err = exec_sql("DROP TABLE IF EXISTS vault_items;");
+    if (!err.ok()) return abort_migrate(err);
+
+    err = exec_sql(R"SQL(
+        CREATE TABLE vault_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            type        INTEGER NOT NULL,
+            title       TEXT NOT NULL,
+            payload     BLOB NOT NULL,
+            iv          BLOB NOT NULL,
+            tag         BLOB NOT NULL,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+    )SQL");
+    if (!err.ok()) return abort_migrate(err);
+
+    sqlite3_stmt* probe = nullptr;
+    int rc = sqlite3_prepare_v2(db_.get(),
+        "SELECT id, entry_name, account, username, password, website, note, "
+        "iv, tag, created_at, updated_at FROM passwords;",
+        -1, &probe, nullptr);
+    if (rc != SQLITE_OK) {
+        return abort_migrate(make_storage_error(
+            "migrate_v2_to_v3: select passwords", db_.get()));
+    }
+    StmtHandle list_stmt(probe);
+
+    const char* kInsert = R"SQL(
+        INSERT INTO vault_items
+            (id, type, title, payload, iv, tag, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    )SQL";
+
+    while (true) {
+        rc = sqlite3_step(list_stmt.get());
+        if (rc == SQLITE_DONE) break;
+        if (rc != SQLITE_ROW) {
+            return abort_migrate(
+                rc_to_error(rc, "migrate_v2_to_v3: step passwords", db_.get()));
+        }
+        core::VaultItem row = read_v2_row(list_stmt.get());
+        auto converted = rewrap(std::move(row));
+        if (!converted) {
+            return abort_migrate(converted.error());
+        }
+        const core::VaultItem& item = *converted;
+        sqlite3_stmt* ins = nullptr;
+        rc = sqlite3_prepare_v2(db_.get(), kInsert, -1, &ins, nullptr);
+        if (rc != SQLITE_OK) {
+            return abort_migrate(make_storage_error(
+                "migrate_v2_to_v3: insert prepare", db_.get()));
+        }
+        StmtHandle ins_stmt(ins);
+        const core::ByteVec payload = payload_for_store(item);
+        sqlite3_bind_int64(ins_stmt.get(), 1, item.id);
+        sqlite3_bind_int(ins_stmt.get(), 2, static_cast<int>(item.type));
+        sqlite3_bind_text(ins_stmt.get(), 3, item.title.c_str(), -1, SQLITE_TRANSIENT);
+        bind_blob_safe(ins_stmt.get(), 4, payload.data(), static_cast<int>(payload.size()));
+        bind_blob_safe(ins_stmt.get(), 5, item.iv.data(), static_cast<int>(item.iv.size()));
+        bind_blob_safe(ins_stmt.get(), 6, item.tag.data(), static_cast<int>(item.tag.size()));
+        sqlite3_bind_int64(ins_stmt.get(), 7, item.created_at);
+        sqlite3_bind_int64(ins_stmt.get(), 8, item.updated_at);
+        rc = sqlite3_step(ins_stmt.get());
+        if (rc != SQLITE_DONE) {
+            return abort_migrate(
+                rc_to_error(rc, "migrate_v2_to_v3: insert step", db_.get()));
+        }
+    }
+    list_stmt.reset();
+
+    bool has_entry_tags = false;
+    {
+        sqlite3_stmt* probe_tags = nullptr;
+        rc = sqlite3_prepare_v2(db_.get(),
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_tags';",
+            -1, &probe_tags, nullptr);
+        if (rc == SQLITE_OK && probe_tags != nullptr) {
+            StmtHandle sp(probe_tags);
+            has_entry_tags = sqlite3_step(sp.get()) == SQLITE_ROW;
+        }
+    }
+    if (has_entry_tags) {
+        err = exec_sql("ALTER TABLE entry_tags RENAME TO entry_tags_v2;");
+        if (!err.ok()) return abort_migrate(err);
+    }
+    err = exec_sql(R"SQL(
+        CREATE TABLE entry_tags (
+            entry_id    INTEGER NOT NULL,
+            tag_id      INTEGER NOT NULL,
+            PRIMARY KEY (entry_id, tag_id),
+            FOREIGN KEY (entry_id) REFERENCES vault_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id)   REFERENCES tags(id) ON DELETE CASCADE
+        );
+    )SQL");
+    if (!err.ok()) return abort_migrate(err);
+    if (has_entry_tags) {
+        err = exec_sql(
+            "INSERT INTO entry_tags (entry_id, tag_id) SELECT entry_id, tag_id FROM entry_tags_v2;");
+        if (!err.ok()) return abort_migrate(err);
+        err = exec_sql("DROP TABLE entry_tags_v2;");
+        if (!err.ok()) return abort_migrate(err);
+    }
+    err = exec_sql("DROP TABLE passwords;");
+    if (!err.ok()) return abort_migrate(err);
+    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_vault_items_title ON vault_items(title);");
+    if (!err.ok()) return abort_migrate(err);
+    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_vault_items_type ON vault_items(type);");
+    if (!err.ok()) return abort_migrate(err);
+    err = exec_sql("CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);");
+    if (!err.ok()) return abort_migrate(err);
+    err = write_schema_version(3);
+    if (!err.ok()) return abort_migrate(err);
+    err = exec_sql("COMMIT;");
+    if (!err.ok()) return abort_migrate(err);
+    (void)exec_sql("PRAGMA foreign_keys = ON;");
+    return core::Error{};
+}
+
+}  // namespace yuli::vault::storage

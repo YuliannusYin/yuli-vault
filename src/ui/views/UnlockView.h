@@ -2,13 +2,13 @@
 // =============================================================================
 // UnlockView.h
 //
-// PwdVault 解锁视图（新设计）。380px 居中卡片：
+// Yuli Vault Unlock视图（新设计）。380px 居Medium卡片：
 //   - 盾牌图标
-//   - 标题「PwdVault」+ 副标题「输入程序密码以解锁保险库」
-//   - 密码输入框（带 lock 图标前缀 + 可见性切换图标按钮）
-//   - 提示行：盾牌图标 + 「连续 5 次失败将锁定 5 分钟」+ 右侧「剩余尝试 5/5」
-//   - 解锁按钮（满宽 primary）
-//   - 底部分隔线 + 「本地加密 · AES-256-GCM · Argon2id」
+//   - 标题「Yuli Vault」+ 副标题「Enter the program password to unlock the vault」
+//   - Password输入框（带 lock 图标前缀 + 可见性切换图标按钮）
+//   - 提示行：盾牌图标 + 「Five failed attempts lock the vault for 5 minutes」+ 右侧「Attempts left 5/5」
+//   - Unlock按钮（满宽 primary）
+//   - 底部分隔线 + 「Local encryption · AES-256-GCM · Argon2id」
 //
 // 模态遮罩：以独立 QWidget 全屏覆盖父窗口实现（避免 QDialog 风格差异）。
 // =============================================================================
@@ -22,7 +22,7 @@ class QLineEdit;
 class QPushButton;
 class QTimer;
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class IpcClient;
 
@@ -33,10 +33,10 @@ public:
     ~UnlockView() override;
 
 signals:
-    /// 解锁成功时触发。
+    /// UnlockSuccess时触发。
     void unlock_succeeded();
 
-    /// 用户关闭对话框但未解锁成功时触发。
+    /// 用户Close对话框但未UnlockSuccess时触发。
     void rejected();
 
 protected:
@@ -55,9 +55,9 @@ private:
     void set_error(const QString& message);
     void update_attempts_display();
     /// 从 service 返回的 error_message 解析剩余次数 / 冷却秒数。
-    /// 命中任一格式返回 true（已同步 UI 显示）；均不命中返回 false（调用方回退本地递减）。
+    /// 命Medium任一格式返回 true（已同步 UI 显示）；均不命Medium返回 false（调用方回退本地递减）。
     bool parse_unlock_failure(const QString& message);
-    /// 进入冷却态：禁用提交与密码输入框，启动每秒倒计时。
+    /// 进入冷却态：Disable提交与Password输入框，启动每秒倒计时。
     void start_cooldown(int seconds);
 
     IpcClient* client_;
@@ -77,4 +77,4 @@ private:
     bool password_visible_ = false;
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

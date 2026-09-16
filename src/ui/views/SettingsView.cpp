@@ -2,8 +2,8 @@
 // =============================================================================
 // SettingsView.cpp
 //
-// PwdVault 设置视图实现（新设计）。
-// 卡片分节布局：安全 / 外观 / 存储 / 关于 / 危险操作。
+// Yuli Vault Settings视图实现（新设计）。
+// 卡片分节布局：Security / Appearance / Storage / About / Danger zone。
 // =============================================================================
 #include "SettingsView.h"
 #include "ErrorMessages.h"
@@ -11,6 +11,7 @@
 #include "ProgramPasswordDialog.h"
 #include "GeneratorHistoryDialog.h"
 #include "Theme.h"
+#include "AppSettings.h"
 #include "IconKit.h"
 #include "Toast.h"
 #include "Version.h"
@@ -28,7 +29,6 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSettings>
 #include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QString>
@@ -37,42 +37,31 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
-/// 应用版本号（由 CMake configure_file 从 Version.h.in 生成，取自顶层 project() VERSION）。
-constexpr const char* kAppVersion = PWDVAULT_VERSION;
+/// 应用Version号（由 CMake configure_file 从 Version.h.in Generate，取自顶层 project() VERSION）。
+constexpr const char* kAppVersion = YULI_VAULT_VERSION;
 
-/// GitHub 项目主页 URL。
-constexpr const char* kGitHubUrl = "https://github.com/YuliannusYin/PWDVault";
+/// GitHub Project home URL。
+constexpr const char* kGitHubUrl = "https://github.com/YuliannusYin/yuli-vault";
 
-/// 开源许可 URL。
+/// License URL。
 constexpr const char* kLicenseUrl = "https://opensource.org/licenses/MIT";
 
-/// 返回数据存储目录路径（%APPDATA%\PwdVault）。
+/// Returns %APPDATA%\YuliVault (matches the service data directory).
 QString data_storage_path() {
+    const QString appdata = qEnvironmentVariable("APPDATA");
+    if (!appdata.isEmpty()) {
+        return QDir(appdata).filePath(QStringLiteral("YuliVault"));
+    }
     const QStringList locs = QStandardPaths::standardLocations(
         QStandardPaths::AppDataLocation);
     if (!locs.isEmpty()) {
-        QString path = locs.first();
-        if (path.endsWith(QStringLiteral("/PwdVault/PwdVault"),
-                          Qt::CaseInsensitive) ||
-            path.endsWith(QStringLiteral("\\PwdVault\\PwdVault"),
-                          Qt::CaseInsensitive)) {
-            int idx = path.lastIndexOf(QLatin1Char('/'));
-            if (idx < 0) idx = path.lastIndexOf(QLatin1Char('\\'));
-            if (idx > 0) path = path.left(idx);
-        }
-        return path;
+        return locs.first();
     }
-    // fallback：QStandardPaths 极少返回空，但万一发生用 APPDATA 环境变量兜底，
-    // 避免返回字面量 "%APPDATA%" 让 QUrl 解析失败。
-    const QString appdata = qEnvironmentVariable("APPDATA");
-    if (!appdata.isEmpty()) {
-        return QDir(appdata).filePath(QStringLiteral("PwdVault"));
-    }
-    return QStringLiteral("C:\\PwdVault");
+    return QStringLiteral("YuliVault");
 }
 
 }  // namespace
@@ -83,8 +72,8 @@ SettingsView::SettingsView(IpcClient* client, QWidget* parent)
     setObjectName(QStringLiteral("settingsView"));
     build_ui();
     sync_theme_segment();
-    // 监听主题切换：顶栏切换主题后同步分段控件选中项，
-    // 否则用户打开设置页会看到旧的选中状态。
+    // 监听Theme切换：顶栏切换Theme后同步分段控件选Medium项，
+    // 否则用户OpenSettings页会看到旧的选Medium状态。
     if (auto* theme = Theme::instance()) {
         connect(theme, &Theme::theme_changed, this, &SettingsView::sync_theme_segment);
     }
@@ -116,8 +105,8 @@ void SettingsView::build_ui() {
     content_layout->setContentsMargins(24, 24, 24, 24);
     content_layout->setSpacing(16);
 
-    // 水平居中容器：左右 stretch + center_container（max-width 720px）。
-    // 垂直方向从顶部开始排列（仅水平居中，不垂直居中），内容多时滚动。
+    // 水平居Medium容器：左右 stretch + center_container（max-width 720px）。
+    // 垂直方向从顶部开始排列（仅水平居Medium，不垂直居Medium），内容多时滚动。
     auto* hbox = new QHBoxLayout();
     hbox->setContentsMargins(0, 0, 0, 0);
     hbox->setSpacing(0);
@@ -131,15 +120,15 @@ void SettingsView::build_ui() {
     hbox->addStretch(1);
     content_layout->addLayout(hbox);
 
-    // ── 安全 section ──
+    // ── Security section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/shield-check.svg"),
-                                     tr("安全"), false, center_container,
+                                     tr("Security"), false, center_container,
                                      icon_color(IconRole::Success));
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
 
-        // 程序密码行
+        // Program password行
         pp_badge_ = new QLabel(section);
         pp_badge_->setProperty("cssClass", QStringLiteral("badgeSuccess"));
         // pp_desc_ 作为本行描述文本：通过 add_row 的 description 参数安置，
@@ -147,7 +136,7 @@ void SettingsView::build_ui() {
         manage_pp_btn_ = new QPushButton(section);
         manage_pp_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/settings-2.svg"), IconRole::Normal));
         manage_pp_btn_->setIconSize(QSize(16, 16));
-        manage_pp_btn_->setText(tr("管理程序密码"));
+        manage_pp_btn_->setText(tr("Program password"));
         manage_pp_btn_->setCursor(Qt::PointingHandCursor);
         manage_pp_btn_->setFixedHeight(40);
         manage_pp_btn_->setProperty("cssClass", QStringLiteral("outline"));
@@ -160,28 +149,26 @@ void SettingsView::build_ui() {
         right_layout->addWidget(pp_badge_);
         right_layout->addWidget(manage_pp_btn_);
         // pp_desc_ 通过 out_desc 回传，供 refresh_password_badge 动态更新文本
-        add_row(section_layout, tr("程序密码"),
-                tr("未启用 · 保险库明文存储"), right_row, &pp_desc_);
+        add_row(section_layout, tr("Program password"),
+                tr("Off · vault is stored in plaintext"), right_row, &pp_desc_);
 
-        // 自动锁定行：item data 携带实际分钟数（0 = 不自动锁定）
+        // Auto-lock行：item data 携带实际分钟数（0 = Never）
         autolock_combo_ = new QComboBox(section);
         autolock_combo_->setObjectName(QStringLiteral("settingsAutolock"));
-        autolock_combo_->addItem(tr("不自动锁定"), QVariant(0));
-        autolock_combo_->addItem(tr("1 分钟"), QVariant(1));
-        autolock_combo_->addItem(tr("5 分钟"), QVariant(5));
-        autolock_combo_->addItem(tr("15 分钟"), QVariant(15));
-        autolock_combo_->addItem(tr("30 分钟"), QVariant(30));
+        autolock_combo_->addItem(tr("Never"), QVariant(0));
+        autolock_combo_->addItem(tr("1 minute"), QVariant(1));
+        autolock_combo_->addItem(tr("5 minutes"), QVariant(5));
+        autolock_combo_->addItem(tr("15 minutes"), QVariant(15));
+        autolock_combo_->addItem(tr("30 minutes"), QVariant(30));
         autolock_combo_->setCurrentIndex(2);
         autolock_combo_->setFixedHeight(40);
         autolock_combo_->setMinimumWidth(120);
         // 从 QSettings 读取持久化值，找到对应 item 设为当前项。
         // 用 QSignalBlocker 防止初始 set 期间触发 currentIndexChanged。
         {
-            QSettings settings(QStringLiteral("PwdVault"),
-                               QStringLiteral("Settings"));
-            const int persisted = settings.value(
+            const int persisted = settings_value(
                 QStringLiteral("autolock_minutes"), 5).toInt();
-            int target = 2;  // 默认 5 分钟
+            int target = 2;  // 默认 5 minutes
             for (int i = 0; i < autolock_combo_->count(); ++i) {
                 if (autolock_combo_->itemData(i).toInt() == persisted) {
                     target = i;
@@ -191,27 +178,27 @@ void SettingsView::build_ui() {
             QSignalBlocker blocker(autolock_combo_);
             autolock_combo_->setCurrentIndex(target);
         }
-        add_row(section_layout, tr("自动锁定"),
-                tr("空闲后自动锁定保险库"), autolock_combo_);
+        add_row(section_layout, tr("Auto-lock"),
+                tr("Lock the vault after idle time"), autolock_combo_);
     }
 
-    // ── 外观 section ──
+    // ── Appearance section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/palette.svg"),
-                                     tr("外观"), false, center_container);
+                                     tr("Appearance"), false, center_container);
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
         auto* seg = build_theme_segmented();
         seg->setParent(section);
-        add_row(section_layout, tr("主题"),
-                tr("切换深色 / 浅色模式"), seg);
+        add_row(section_layout, tr("Theme"),
+                tr("Switch dark / light mode"), seg);
 
-        // 高对比度模式：独立开关，增强中性边框可见度
+        // High contrast：独立开关，增StrongMedium性边框可见度
         hc_checkbox_ = new QCheckBox(section);
         hc_checkbox_->setChecked(Theme::is_high_contrast());
         hc_checkbox_->setCursor(Qt::PointingHandCursor);
-        add_row(section_layout, tr("高对比度模式"),
-                tr("增强边框可见度，便于辨识控件轮廓"), hc_checkbox_);
+        add_row(section_layout, tr("High contrast"),
+                tr("Stronger borders for control outlines"), hc_checkbox_);
         connect(hc_checkbox_, &QCheckBox::toggled, this, [this](bool checked) {
             Theme::set_high_contrast(checked);
         });
@@ -221,50 +208,76 @@ void SettingsView::build_ui() {
                 hc_checkbox_->setChecked(enabled);
             });
         }
+
+        language_combo_ = new QComboBox(section);
+        language_combo_->setObjectName(QStringLiteral("settingsLanguage"));
+        language_combo_->addItem(tr("System"), static_cast<int>(UiLanguage::System));
+        language_combo_->addItem(tr("English"), static_cast<int>(UiLanguage::English));
+        language_combo_->addItem(QStringLiteral("简体中文"),
+                                 static_cast<int>(UiLanguage::ChineseSimplified));
+        language_combo_->setFixedHeight(40);
+        language_combo_->setMinimumWidth(160);
+        {
+            const int persisted = static_cast<int>(load_ui_language());
+            int target = 0;
+            for (int i = 0; i < language_combo_->count(); ++i) {
+                if (language_combo_->itemData(i).toInt() == persisted) {
+                    target = i;
+                    break;
+                }
+            }
+            QSignalBlocker blocker(language_combo_);
+            language_combo_->setCurrentIndex(target);
+        }
+        add_row(section_layout, tr("Language"),
+                tr("System follows the OS locale. A restart applies the change."),
+                language_combo_);
+        connect(language_combo_, &QComboBox::currentIndexChanged,
+                this, &SettingsView::on_language_changed);
     }
 
-    // ── 生成器 section ──
+    // ── Generator section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/wand-2.svg"),
-                                     tr("生成器"), false, center_container,
+                                     tr("Generator"), false, center_container,
                                      icon_color(IconRole::Info));
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
 
-        // 历史记录行：左描述动态显示「已保存 N 条记录 / 暂无记录」
+        // 历史记录行：左描述动态显示「已保存 N 条记录 / No records」
         view_history_btn_ = new QPushButton(section);
         view_history_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/clock.svg"), IconRole::Normal));
         view_history_btn_->setIconSize(QSize(16, 16));
-        view_history_btn_->setText(tr("查看记录"));
+        view_history_btn_->setText(tr("View history"));
         view_history_btn_->setCursor(Qt::PointingHandCursor);
         view_history_btn_->setFixedHeight(40);
         view_history_btn_->setProperty("cssClass", QStringLiteral("outline"));
-        add_row(section_layout, tr("密码生成记录"),
-                tr("加载中…"), view_history_btn_, &gen_history_desc_);
+        add_row(section_layout, tr("Generated passwords"),
+                tr("Loading…"), view_history_btn_, &gen_history_desc_);
 
-        // 上限下拉：item data 携带实际数值（0 = 无限制）
+        // 上限下拉：item data 携带实际数值（0 = Unlimited）
         gen_limit_combo_ = new QComboBox(section);
         gen_limit_combo_->setObjectName(QStringLiteral("settingsGenLimit"));
-        gen_limit_combo_->addItem(tr("无限制"), QVariant(0));
-        gen_limit_combo_->addItem(tr("10 条"), QVariant(10));
-        gen_limit_combo_->addItem(tr("20 条"), QVariant(20));
-        gen_limit_combo_->addItem(tr("50 条"), QVariant(50));
-        gen_limit_combo_->addItem(tr("100 条"), QVariant(100));
-        gen_limit_combo_->addItem(tr("200 条"), QVariant(200));
+        gen_limit_combo_->addItem(tr("Unlimited"), QVariant(0));
+        gen_limit_combo_->addItem(tr("10"), QVariant(10));
+        gen_limit_combo_->addItem(tr("20"), QVariant(20));
+        gen_limit_combo_->addItem(tr("50"), QVariant(50));
+        gen_limit_combo_->addItem(tr("100"), QVariant(100));
+        gen_limit_combo_->addItem(tr("200"), QVariant(200));
         gen_limit_combo_->setCurrentIndex(0);
         gen_limit_combo_->setFixedHeight(40);
         gen_limit_combo_->setMinimumWidth(120);
-        add_row(section_layout, tr("记录上限"),
-                tr("保留最近 N 条生成记录，超出自动清理"), gen_limit_combo_);
+        add_row(section_layout, tr("History limit"),
+                tr("Keep the last N generated passwords"), gen_limit_combo_);
     }
 
-    // ── 存储 section ──
+    // ── Storage section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/database.svg"),
-                                     tr("存储"), false, center_container);
+                                     tr("Storage"), false, center_container);
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
-        // 存储路径行
+        // Storage path行
         storage_path_label_ = new QLabel(data_storage_path(), section);
         storage_path_label_->setObjectName(QStringLiteral("settingsPathBox"));
         storage_path_label_->setProperty("cssClass", QStringLiteral("pathBox"));
@@ -273,7 +286,7 @@ void SettingsView::build_ui() {
         open_storage_btn_ = new QPushButton(section);
         open_storage_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/folder-open.svg"), IconRole::Normal));
         open_storage_btn_->setIconSize(QSize(16, 16));
-        open_storage_btn_->setText(tr("打开"));
+        open_storage_btn_->setText(tr("Open"));
         open_storage_btn_->setCursor(Qt::PointingHandCursor);
         open_storage_btn_->setFixedHeight(40);
         open_storage_btn_->setProperty("cssClass", QStringLiteral("outline"));
@@ -284,41 +297,41 @@ void SettingsView::build_ui() {
         right_layout1->setSpacing(8);
         right_layout1->addWidget(storage_path_label_);
         right_layout1->addWidget(open_storage_btn_);
-        add_row(section_layout, tr("存储路径"),
-                tr("保险库数据文件位置"), right_row1);
+        add_row(section_layout, tr("Storage path"),
+                tr("Location of vault data files"), right_row1);
 
-        // 条目数量行
+        // Item count行
         entry_count_label_ = new QLabel(QStringLiteral("-"), section);
         entry_count_label_->setProperty("cssClass", QStringLiteral("fieldLabel"));
-        add_row(section_layout, tr("条目数量"),
-                tr("已保存的密码记录"), entry_count_label_);
+        add_row(section_layout, tr("Item count"),
+                tr("Saved vault items"), entry_count_label_);
     }
 
-    // ── 关于 section ──
+    // ── About section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/info.svg"),
-                                     tr("关于"), false, center_container);
+                                     tr("About"), false, center_container);
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
         version_value_ = new QLabel(
             tr("v%1").arg(QString::fromLatin1(kAppVersion)), section);
         version_value_->setProperty("cssClass", QStringLiteral("fieldLabel"));
-        add_row(section_layout, tr("版本"),
-                tr("PwdVault"), version_value_);
+        add_row(section_layout, tr("Version"),
+                tr("Yuli Vault"), version_value_);
 
         auto* enc_value = new QLabel(tr("AES-256-GCM · Argon2id"), section);
         enc_value->setProperty("cssClass", QStringLiteral("fieldLabel"));
-        add_row(section_layout, tr("加密方案"),
-                tr("数据加密与密钥派生"), enc_value);
+        add_row(section_layout, tr("Encryption"),
+                tr("Data encryption and key derivation"), enc_value);
 
         license_btn_ = new QPushButton(section);
         license_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/external-link.svg"), IconRole::Normal));
         license_btn_->setIconSize(QSize(16, 16));
-        license_btn_->setText(tr("查看"));
+        license_btn_->setText(tr("View"));
         license_btn_->setCursor(Qt::PointingHandCursor);
         license_btn_->setFixedHeight(40);
         license_btn_->setProperty("cssClass", QStringLiteral("outline"));
-        add_row(section_layout, tr("开源许可"),
+        add_row(section_layout, tr("License"),
                 tr("MIT License"), license_btn_);
 
         github_btn_ = new QPushButton(section);
@@ -328,30 +341,30 @@ void SettingsView::build_ui() {
         github_btn_->setCursor(Qt::PointingHandCursor);
         github_btn_->setFixedHeight(40);
         github_btn_->setProperty("cssClass", QStringLiteral("outline"));
-        add_row(section_layout, tr("项目主页"),
-                tr("源代码与问题反馈"), github_btn_);
+        add_row(section_layout, tr("Project home"),
+                tr("Source code and issue tracker"), github_btn_);
     }
 
-    // ── 危险操作 section ──
+    // ── Danger zone section ──
     {
         auto* section = make_section(QStringLiteral(":/icons/shield-off.svg"),
-                                     tr("危险操作"),
+                                     tr("Danger zone"),
                                      /*danger=*/true, center_container);
         center_layout->addWidget(section);
         auto* section_layout = qobject_cast<QVBoxLayout*>(section->layout());
         lock_now_btn_ = new QPushButton(section);
         lock_now_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/lock.svg"), IconRole::Danger));
         lock_now_btn_->setIconSize(QSize(16, 16));
-        lock_now_btn_->setText(tr("立即锁定"));
+        lock_now_btn_->setText(tr("Lock now"));
         lock_now_btn_->setCursor(Qt::PointingHandCursor);
         lock_now_btn_->setFixedHeight(40);
         lock_now_btn_->setProperty("cssClass", QStringLiteral("danger"));
-        add_row(section_layout, tr("锁定保险库"),
-                tr("立即锁定，需重新输入程序密码"), lock_now_btn_);
+        add_row(section_layout, tr("Lock vault"),
+                tr("Lock now. The program password is required to unlock."), lock_now_btn_);
     }
 
     // content 不再设 maxWidth：由 center_container->setMaximumWidth(720)
-    // 控制模块宽度，配合 hbox stretch 实现水平居中。
+    // 控制模块宽度，配合 hbox stretch 实现水平居Medium。
     scroll->setWidget(content);
 
     // 信号槽
@@ -394,8 +407,8 @@ QFrame* SettingsView::make_section(const QString& icon_resource,
     // 图标颜色优先级：调用方显式传入 > danger 红 > 品牌蓝
     // 注意：参数名 icon_color 遮蔽了同名的全局函数，调用需全限定
     QColor clr = icon_color.isValid() ? icon_color
-        : (danger ? pwdvault::ui::icon_color(IconRole::Danger)
-                  : pwdvault::ui::icon_color(IconRole::Info));
+        : (danger ? yuli::vault::ui::icon_color(IconRole::Danger)
+                  : yuli::vault::ui::icon_color(IconRole::Info));
     icon_lbl->setPixmap(tinted_pixmap(icon_resource, clr, QSize(18, 18)));
     icon_lbl->setProperty("cssClass", QStringLiteral("inlineIcon"));
     header_layout->addWidget(icon_lbl);
@@ -463,9 +476,9 @@ QFrame* SettingsView::build_theme_segmented() {
         return btn;
     };
 
-    theme_light_btn_ = make_btn(tr("浅色"), frame);
-    theme_dark_btn_ = make_btn(tr("深色"), frame);
-    theme_system_btn_ = make_btn(tr("跟随系统"), frame);
+    theme_light_btn_ = make_btn(tr("Light"), frame);
+    theme_dark_btn_ = make_btn(tr("Dark"), frame);
+    theme_system_btn_ = make_btn(tr("System"), frame);
 
     theme_group_->addButton(theme_light_btn_, 0);
     theme_group_->addButton(theme_dark_btn_, 1);
@@ -494,18 +507,18 @@ void SettingsView::sync_theme_segment() {
 void SettingsView::refresh_password_badge() {
     if (!pp_badge_) return;
     if (password_enabled_) {
-        pp_badge_->setText(tr("已启用"));
+        pp_badge_->setText(tr("On"));
         pp_badge_->setProperty("cssClass", QStringLiteral("badgeSuccess"));
-        if (pp_desc_) pp_desc_->setText(tr("已启用 · 保险库加密存储"));
+        if (pp_desc_) pp_desc_->setText(tr("On · vault is encrypted"));
     } else {
-        pp_badge_->setText(tr("未启用"));
+        pp_badge_->setText(tr("Off"));
         pp_badge_->setProperty("cssClass", QStringLiteral("badge"));
-        if (pp_desc_) pp_desc_->setText(tr("未启用 · 保险库明文存储"));
+        if (pp_desc_) pp_desc_->setText(tr("Off · vault is stored in plaintext"));
     }
-    // 明文模式（未启用程序密码）下隐藏「立即锁定」按钮：
-    // 无加密即无可锁，按钮可见会让用户误操作后报错。
+    // 明文模式（未EnableProgram password）下隐藏「Lock now」按钮：
+    // 无加密即无可锁，按钮可见会让用户误Actions后报错。
     if (lock_now_btn_) lock_now_btn_->setVisible(password_enabled_);
-    // 刷新 dynamic property 样式
+    // Refresh dynamic property 样式
     pp_badge_->style()->unpolish(pp_badge_);
     pp_badge_->style()->polish(pp_badge_);
 }
@@ -519,7 +532,7 @@ void SettingsView::refresh_entry_count() {
     auto result = client_->list_entries();
     if (result.ok()) {
         entry_count_label_->setText(
-            tr("%1 条").arg(result.value().entries.size()));
+            tr("%1 items").arg(result.value().entries.size()));
     } else {
         entry_count_label_->setText(QStringLiteral("-"));
     }
@@ -542,8 +555,8 @@ void SettingsView::refresh_generator_settings() {
             if (result.ok()) {
                 const int n = static_cast<int>(result.value().records.size());
                 gen_history_desc_->setText(
-                    n == 0 ? tr("暂无记录")
-                           : tr("已保存 %1 条记录").arg(n));
+                    n == 0 ? tr("No records")
+                           : tr("%1 records saved").arg(n));
             } else {
                 gen_history_desc_->setText(QStringLiteral("-"));
             }
@@ -564,7 +577,7 @@ void SettingsView::refresh_generator_settings() {
             return;
         }
         const int32_t limit = result.value().history_limit;
-        // 找到与 limit 匹配的项；无匹配时（数值不在候选中）回退到「无限制」
+        // 找到与 limit 匹配的项；无匹配时（数值不在候选Medium）回退到「Unlimited」
         int target_index = 0;
         if (gen_limit_combo_) {
             gen_limit_syncing_ = true;
@@ -585,7 +598,7 @@ void SettingsView::refresh_generator_settings() {
 }
 
 // ---------------------------------------------------------------------------
-// 状态刷新
+// 状态Refresh
 // ---------------------------------------------------------------------------
 
 void SettingsView::refresh_status() {
@@ -615,7 +628,7 @@ void SettingsView::refresh_status() {
 
 void SettingsView::on_manage_password_clicked() {
     if (!client_) return;
-    // 根据当前密码状态选择默认 Tab：已启用 → 修改；未启用 → 启用
+    // 根据当前Password状态选择默认 Tab：已Enable → Change；未Enable → Enable
     const auto initial_mode = password_enabled_
         ? ProgramPasswordDialog::Mode::Change
         : ProgramPasswordDialog::Mode::Enable;
@@ -633,8 +646,8 @@ void SettingsView::on_open_storage_clicked() {
     const QString path = data_storage_path();
     const QUrl url = QUrl::fromLocalFile(path);
     if (!QDesktopServices::openUrl(url)) {
-        QMessageBox::warning(this, tr("打开失败"),
-            tr("无法打开存储目录：%1").arg(path));
+        QMessageBox::warning(this, tr("Open failed"),
+            tr("Could not open the data folder: %1").arg(path));
     }
 }
 
@@ -653,9 +666,9 @@ void SettingsView::on_lock_now_clicked() {
         emit lock_requested();
     } else {
         const QString msg = QString::fromStdString(result.error().what());
-        QMessageBox::warning(this, tr("锁定失败"),
-            msg.isEmpty() ? tr("锁定密码库失败。")
-                          : tr("锁定失败：%1").arg(msg));
+        QMessageBox::warning(this, tr("Lock failed"),
+            msg.isEmpty() ? tr("Could not lock the vault.")
+                          : tr("Lock failed: %1").arg(msg));
     }
 }
 
@@ -671,13 +684,13 @@ void SettingsView::on_theme_segment_clicked(int idx) {
 void SettingsView::on_view_generator_history_clicked() {
     if (!client_) return;
     auto* dlg = new GeneratorHistoryDialog(client_, this);
-    // 空状态「去生成密码」→ 中转给 MainWindow 切换到 GeneratorView
+    // 空状态「Generate a password」→ Medium转给 MainWindow 切换到 GeneratorView
     connect(dlg, &GeneratorHistoryDialog::generate_requested,
             this, &SettingsView::generate_requested);
-    // 关闭后自动清理 + 刷新本页「已保存 N 条记录」描述
+    // Close后自动清理 + Refresh本页「已保存 N 条记录」描述
     connect(dlg, &QDialog::finished, this, [this]() {
         if (!client_) return;
-        // 重新查 service：可能用户在弹窗里删除/清空了记录（异步）
+        // 重新查 service：可能用户在弹窗里Delete/清空了记录（异步）
         auto* watcher = new QFutureWatcher<core::Result<protocol::ListGeneratedRecordsResponse>>(this);
         connect(watcher, &QFutureWatcher<core::Result<protocol::ListGeneratedRecordsResponse>>::finished,
                 this, [this, watcher]() {
@@ -685,8 +698,8 @@ void SettingsView::on_view_generator_history_clicked() {
             if (gen_history_desc_ && list_result.ok()) {
                 const int n = static_cast<int>(list_result.value().records.size());
                 gen_history_desc_->setText(
-                    n == 0 ? tr("暂无记录")
-                           : tr("已保存 %1 条记录").arg(n));
+                    n == 0 ? tr("No records")
+                           : tr("%1 records saved").arg(n));
             }
             watcher->deleteLater();
         });
@@ -711,7 +724,7 @@ void SettingsView::on_generator_limit_changed(int index) {
             // 失败时回退下拉到 service 端实际值
             refresh_generator_settings();
         } else if (gen_history_desc_ && limit > 0) {
-            // 成功时刷新历史记录条数描述（清理可能减少记录数，异步）
+            // Success时Refresh历史记录条数描述（清理可能减少记录数，异步）
             auto* list_watcher = new QFutureWatcher<core::Result<protocol::ListGeneratedRecordsResponse>>(this);
             connect(list_watcher, &QFutureWatcher<core::Result<protocol::ListGeneratedRecordsResponse>>::finished,
                     this, [this, list_watcher]() {
@@ -719,8 +732,8 @@ void SettingsView::on_generator_limit_changed(int index) {
                 if (gen_history_desc_ && list_result.ok()) {
                     const int n = static_cast<int>(list_result.value().records.size());
                     gen_history_desc_->setText(
-                        n == 0 ? tr("暂无记录")
-                               : tr("已保存 %1 条记录").arg(n));
+                        n == 0 ? tr("No records")
+                               : tr("%1 records saved").arg(n));
                 }
                 list_watcher->deleteLater();
             });
@@ -729,6 +742,15 @@ void SettingsView::on_generator_limit_changed(int index) {
         watcher->deleteLater();
     });
     watcher->setFuture(client_->set_generator_limit_async(static_cast<int32_t>(limit)));
+}
+
+void SettingsView::on_language_changed(int index) {
+    if (!language_combo_ || index < 0) return;
+    const auto language = static_cast<UiLanguage>(language_combo_->itemData(index).toInt());
+    save_ui_language(language);
+    QMessageBox::information(
+        this, tr("Language"),
+        tr("Restart Yuli Vault to apply the language."));
 }
 
 int SettingsView::get_autolock_minutes() const {
@@ -743,9 +765,8 @@ void SettingsView::on_autolock_changed(int index) {
     const int minutes = autolock_combo_->itemData(index).toInt();
     // 持久化用户选择：MainWindow::setup_autolock 也会写一份，双写无害
     // （键值相同，确保即使 MainWindow 未连接也能保存）。
-    QSettings settings(QStringLiteral("PwdVault"), QStringLiteral("Settings"));
-    settings.setValue(QStringLiteral("autolock_minutes"), minutes);
+    settings_set(QStringLiteral("autolock_minutes"), minutes);
     emit autolock_changed(minutes);
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

@@ -2,11 +2,11 @@
 // =============================================================================
 // PasswordBookView.h
 //
-// PwdVault 密码本视图（新设计）。master-detail 布局：
-//   - 顶部搜索行：搜索框（带 search 图标前缀）+ 字段下拉 + 刷新按钮
-//   - 左侧 340px 列表：每条目 = 头像（首字母）+ 条目名 + 账号 + chevron-right
-//   - 右侧详情：头部（大头像 + 条目名 + 账号 + 复制/编辑/删除按钮）
-//                + 字段网格（条目名/账号/用户名/密码（带可见性切换）/网站/标签/备注（markdown）/时间）
+// Yuli Vault Vault视图（新设计）。master-detail 布局：
+//   - 顶部搜索行：搜索框（带 search 图标前缀）+ 字段下拉 + Refresh按钮
+//   - 左侧 340px 列表：每条目 = 头像（首字母）+ Title + Account + chevron-right
+//   - 右侧详情：头部（大头像 + Title + Account + Copy/Edit/Delete按钮）
+//                + 字段网格（Title/Account/Username/Password（带可见性切换）/Website/Tags/Notes (Markdown)/Time）
 //                + 外部链接按钮
 //
 // 进入视图时自动调用 list_entries 加载；条目数变化时 emit entry_count_changed。
@@ -33,7 +33,7 @@ class QTextBrowser;
 class QTimer;
 class QWidget;
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class FlowLayout;
 class IpcClient;
@@ -49,20 +49,20 @@ public:
     /// 重新加载列表（调用 list_entries）。
     void refresh();
 
-    /// 把焦点设置到搜索框（供全局快捷键 Ctrl+F 调用）。
+    /// 把焦点Settings到搜索框（供全局快捷键 Ctrl+F 调用）。
     void focus_search();
 
-    /// 把焦点设置到左侧列表（供 MainWindow 视图切换后键盘导航调用）。
+    /// 把焦点Settings到左侧列表（供 MainWindow 视图切换后键盘导航调用）。
     void focus_list();
 
 signals:
-    /// 编辑条目时触发，MainWindow 可用于切换视图或刷新。
+    /// Edit条目时触发，MainWindow 可用于切换视图或Refresh。
     void entry_updated(int64_t id);
 
-    /// 条目数量变化时触发，MainWindow 用于更新顶栏 badge。
+    /// Item count变化时触发，MainWindow 用于更新顶栏 badge。
     void entry_count_changed(int count);
 
-    /// 用户在空状态点击「新建条目」时触发，MainWindow 切换到 InputView。
+    /// 用户在空状态点击「New item」时触发，MainWindow 切换到 InputView。
     void entry_add_requested();
 
 private slots:
@@ -106,7 +106,7 @@ private:
     // Markdown 渲染缓存（entry.id → html）
     QHash<int64_t, QString> note_cache_;
 
-    // 加载中占位提示（复用 empty_hint_，仅作语义别名指针）
+    // 加载Medium占位提示（复用 empty_hint_，仅作语义别名指针）
     QLabel* loading_hint_ = nullptr;
 
     // 顶部搜索行
@@ -135,11 +135,11 @@ private:
     QLabel* field_username_ = nullptr;
     QLabel* field_website_ = nullptr;
     QLabel* field_password_ = nullptr;
-    QWidget* field_tags_container_ = nullptr;  ///< 标签容器（用 FlowLayout 展示只读芯片）
+    QWidget* field_tags_container_ = nullptr;  ///< Tags容器（用 FlowLayout 展示只读芯片）
     FlowLayout* field_tags_layout_ = nullptr;
     QLabel* field_created_ = nullptr;
     QLabel* field_updated_ = nullptr;
-    QTextBrowser* field_note_ = nullptr;  ///< 备注（markdown 渲染）
+    QTextBrowser* field_note_ = nullptr;  ///< Notes（markdown 渲染）
     QLabel* strength_badge_ = nullptr;
     QPushButton* toggle_pwd_btn_ = nullptr;
     QPushButton* copy_entry_name_btn_ = nullptr;
@@ -154,4 +154,4 @@ private:
     QPushButton* empty_add_button_ = nullptr;  ///< 空状态引导按钮
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

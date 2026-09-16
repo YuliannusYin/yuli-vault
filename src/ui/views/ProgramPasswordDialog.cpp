@@ -2,8 +2,8 @@
 // =============================================================================
 // ProgramPasswordDialog.cpp
 //
-// PwdVault 程序密码管理对话框实现（新设计）。
-// 单 Tab 切换弹窗（480px 居中 + 模态遮罩），三种模式通过分段控件切换。
+// Yuli Vault Program password管理对话框实现（新设计）。
+// 单 Tab 切换弹窗（480px 居Medium + 模态遮罩），三种模式通过分段控件切换。
 // =============================================================================
 #include "ProgramPasswordDialog.h"
 #include "IpcClient.h"
@@ -28,12 +28,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
-// 样式由 QSS 中对应的 cssClass 提供（inputField / inlineEdit / inlineIcon / inlineBtn）
-// 强度等级判定与文案统一通过 StrengthUtil 提供。
+// 样式由 QSS Medium对应的 cssClass 提供（inputField / inlineEdit / inlineIcon / inlineBtn）
+// Strong度等级判定与文案统一通过 StrengthUtil 提供。
 
 }  // namespace
 
@@ -46,7 +46,7 @@ ProgramPasswordDialog::ProgramPasswordDialog(IpcClient* client,
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     setAttribute(Qt::WA_TranslucentBackground);
-    setWindowTitle(tr("管理程序密码"));
+    setWindowTitle(tr("Program password"));
 
     // 自动覆盖父窗口大小
     // parent 通常是 SettingsView（MainWindow 的子 widget，非 top-level），
@@ -74,7 +74,7 @@ void ProgramPasswordDialog::closeEvent(QCloseEvent* event) {
 }
 
 void ProgramPasswordDialog::keyPressEvent(QKeyEvent* event) {
-    // ESC 键关闭对话框
+    // ESC 键Close对话框
     if (event->key() == Qt::Key_Escape) {
         close_dialog();
         return;
@@ -120,7 +120,7 @@ void ProgramPasswordDialog::build_ui() {
     key_icon->setProperty("cssClass", QStringLiteral("inlineIcon"));
     header_layout->addWidget(key_icon);
 
-    auto* title = new QLabel(tr("管理程序密码"), header);
+    auto* title = new QLabel(tr("Program password"), header);
     title->setProperty("cssClass", QStringLiteral("sectionTitle"));
     header_layout->addWidget(title);
     header_layout->addStretch(1);
@@ -159,9 +159,9 @@ void ProgramPasswordDialog::build_ui() {
         return btn;
     };
 
-    tab_enable_ = make_tab(tr("启用"));
-    tab_change_ = make_tab(tr("修改"));
-    tab_disable_ = make_tab(tr("禁用"));
+    tab_enable_ = make_tab(tr("Enable"));
+    tab_change_ = make_tab(tr("Change"));
+    tab_disable_ = make_tab(tr("Disable"));
 
     mode_group_->addButton(tab_enable_, static_cast<int>(Mode::Enable));
     mode_group_->addButton(tab_change_, static_cast<int>(Mode::Change));
@@ -220,21 +220,21 @@ void ProgramPasswordDialog::build_ui() {
         fl->addWidget(toggle_btn);
     };
 
-    // 当前程序密码
-    body_layout->addWidget(make_label(tr("当前程序密码")));
+    // 当前Program password
+    body_layout->addWidget(make_label(tr("Current program password")));
     make_field(current_frame_, current_edit_, toggle_current_btn_,
                QStringLiteral(":/icons/lock.svg"),
-               tr("输入当前程序密码"));
+               tr("Enter the current program password"));
     body_layout->addWidget(current_frame_);
 
-    // 新程序密码
-    body_layout->addWidget(make_label(tr("新程序密码")));
+    // 新Program password
+    body_layout->addWidget(make_label(tr("New program password")));
     make_field(new_frame_, new_edit_, toggle_new_btn_,
                QStringLiteral(":/icons/key.svg"),
-               tr("输入新程序密码"));
+               tr("Enter a new program password"));
     body_layout->addWidget(new_frame_);
 
-    // 强度行：4 段 + 文字
+    // Strong度行：4 段 + 文字
     auto* strength_row = new QHBoxLayout();
     strength_row->setContentsMargins(0, 4, 0, 0);
     strength_row->setSpacing(8);
@@ -258,11 +258,11 @@ void ProgramPasswordDialog::build_ui() {
     strength_row->addWidget(strength_label_);
     body_layout->addLayout(strength_row);
 
-    // 确认新密码
-    body_layout->addWidget(make_label(tr("确认新密码")));
+    // Confirm new password
+    body_layout->addWidget(make_label(tr("Confirm new password")));
     make_field(confirm_frame_, confirm_edit_, toggle_confirm_btn_,
                QStringLiteral(":/icons/shield-check.svg"),
-               tr("再次输入新密码"));
+               tr("Re-enter the new password"));
     body_layout->addWidget(confirm_frame_);
 
     // 错误提示
@@ -282,8 +282,7 @@ void ProgramPasswordDialog::build_ui() {
     info_icon->setProperty("cssClass", QStringLiteral("inlineIcon"));
     info_layout->addWidget(info_icon, 0, Qt::AlignTop);
     auto* info_text = new QLabel(
-        tr("程序密码用于派生加密密钥（Argon2id）。"
-           "修改后保险库将用新密钥重新加密，请妥善保管。"),
+        tr("The program password derives the encryption key (Argon2id). Changing it re-encrypts the vault. Keep the new password safe."),
         info_box);
     info_text->setWordWrap(true);
     info_text->setProperty("cssClass", QStringLiteral("caption"));
@@ -301,7 +300,7 @@ void ProgramPasswordDialog::build_ui() {
     footer_layout->setSpacing(12);
     footer_layout->addStretch(1);
 
-    auto* cancel_btn = new QPushButton(tr("取消"), footer);
+    auto* cancel_btn = new QPushButton(tr("Cancel"), footer);
     cancel_btn->setCursor(Qt::PointingHandCursor);
     cancel_btn->setFixedHeight(40);
     cancel_btn->setMinimumWidth(80);
@@ -340,7 +339,7 @@ void ProgramPasswordDialog::build_ui() {
     connect(new_edit_, &QLineEdit::textChanged,
             this, &ProgramPasswordDialog::on_new_password_changed);
 
-    // 强度评估 debounce：每次输入触发 IPC 会卡顿，用 300ms 计时器合并连续输入。
+    // Strong度评估 debounce：每次输入触发 IPC 会卡顿，用 300ms 计时器合并连续输入。
     strength_timer_ = new QTimer(this);
     strength_timer_->setSingleShot(true);
     connect(strength_timer_, &QTimer::timeout, this, [this]() {
@@ -354,7 +353,7 @@ void ProgramPasswordDialog::build_ui() {
 
 void ProgramPasswordDialog::apply_mode(Mode mode) {
     current_mode_ = mode;
-    // 同步 Tab 选中状态
+    // 同步 Tab 选Medium状态
     QSignalBlocker b(mode_group_);
     auto* btn = mode_group_->button(static_cast<int>(mode));
     if (btn) btn->setChecked(true);
@@ -367,7 +366,7 @@ void ProgramPasswordDialog::apply_mode(Mode mode) {
             strength_bar_->show();
             strength_label_->show();
             confirm_frame_->show();
-            submit_btn_->setText(tr("启用"));
+            submit_btn_->setText(tr("Enable"));
             set_error(QString());
             break;
         case Mode::Change:
@@ -376,7 +375,7 @@ void ProgramPasswordDialog::apply_mode(Mode mode) {
             strength_bar_->show();
             strength_label_->show();
             confirm_frame_->show();
-            submit_btn_->setText(tr("确认修改"));
+            submit_btn_->setText(tr("Save changes"));
             set_error(QString());
             break;
         case Mode::Disable:
@@ -385,7 +384,7 @@ void ProgramPasswordDialog::apply_mode(Mode mode) {
             strength_bar_->hide();
             strength_label_->hide();
             confirm_frame_->hide();
-            submit_btn_->setText(tr("确认禁用"));
+            submit_btn_->setText(tr("Confirm disable"));
             set_error(QString());
             break;
     }
@@ -425,7 +424,7 @@ void ProgramPasswordDialog::on_toggle_confirm_clicked() {
 
 void ProgramPasswordDialog::on_new_password_changed(const QString& text) {
     (void)text;
-    // debounce：重启计时器，300ms 内无新输入才真正发起强度评估 IPC
+    // debounce：重启计时器，300ms 内无新输入才真正发起Strong度评估 IPC
     if (strength_timer_) strength_timer_->start(300);
 }
 
@@ -437,7 +436,7 @@ void ProgramPasswordDialog::on_submit_clicked() {
     set_error(QString());
 
     if (!client_) {
-        set_error(tr("内部错误：IPC 客户端不可用。"));
+        set_error(tr("Internal error: IPC client is unavailable."));
         return;
     }
 
@@ -445,18 +444,18 @@ void ProgramPasswordDialog::on_submit_clicked() {
         case Mode::Enable: {
             const std::string password = new_edit_->text().toStdString();
             if (password.empty()) {
-                set_error(tr("程序密码不能为空。"));
+                set_error(tr("Program password cannot be empty."));
                 return;
             }
             const std::string confirm = confirm_edit_->text().toStdString();
             if (password != confirm) {
-                set_error(tr("两次输入的密码不一致。"));
+                set_error(tr("The passwords do not match."));
                 return;
             }
             auto result = client_->enable_program_password(password);
             if (result.ok() && result.value().success) {
                 succeeded_ = true;
-                Toast::show(this, tr("程序密码已启用"));
+                Toast::show(this, tr("Program password enabled"));
                 emit succeeded();
                 accept();
             } else {
@@ -464,8 +463,8 @@ void ProgramPasswordDialog::on_submit_clicked() {
                     ? QString::fromStdString(result.value().error_message)
                     : QString::fromStdString(result.error().what());
                 set_error(msg.isEmpty()
-                              ? tr("启用程序密码失败。")
-                              : tr("启用失败：%1").arg(msg));
+                              ? tr("Could not enable the program password.")
+                              : tr("Enable failed: %1").arg(msg));
             }
             break;
         }
@@ -473,22 +472,22 @@ void ProgramPasswordDialog::on_submit_clicked() {
             const std::string old_pw = current_edit_->text().toStdString();
             const std::string new_pw = new_edit_->text().toStdString();
             if (old_pw.empty() || new_pw.empty()) {
-                set_error(tr("密码不能为空。"));
+                set_error(tr("Password cannot be empty."));
                 return;
             }
             const std::string confirm = confirm_edit_->text().toStdString();
             if (new_pw != confirm) {
-                set_error(tr("两次输入的新密码不一致。"));
+                set_error(tr("The new passwords do not match."));
                 return;
             }
             if (old_pw == new_pw) {
-                set_error(tr("新密码不能与旧密码相同。"));
+                set_error(tr("The new password must differ from the old one."));
                 return;
             }
             auto result = client_->change_program_password(old_pw, new_pw);
             if (result.ok() && result.value().success) {
                 succeeded_ = true;
-                Toast::show(this, tr("程序密码已修改"));
+                Toast::show(this, tr("Program password changed"));
                 emit succeeded();
                 accept();
             } else {
@@ -496,32 +495,32 @@ void ProgramPasswordDialog::on_submit_clicked() {
                     ? QString::fromStdString(result.value().error_message)
                     : QString::fromStdString(result.error().what());
                 set_error(msg.isEmpty()
-                              ? tr("修改程序密码失败。")
-                              : tr("修改失败：%1").arg(msg));
+                              ? tr("Could not change the program password.")
+                              : tr("Change failed: %1").arg(msg));
             }
             break;
         }
         case Mode::Disable: {
             const std::string password = current_edit_->text().toStdString();
             if (password.empty()) {
-                set_error(tr("请输入当前程序密码。"));
+                set_error(tr("Enter the current program password."));
                 return;
             }
-            // Task 21: 二次确认——禁用后所有密码将以明文存储，需用户再次确认
+            // Task 21: 二次确认——Disable后所有Password将以明文Storage，需用户再次确认
             const auto ret = QMessageBox::warning(
                 this,
-                tr("确认禁用"),
-                tr("禁用后所有密码将以明文存储，确定继续？"),
+                tr("Confirm disable"),
+                tr("All items will be stored unencrypted. Continue?"),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No
             );
             if (ret != QMessageBox::Yes) {
-                return;  // 用户取消，不执行禁用
+                return;  // 用户Cancel，不执行Disable
             }
             auto result = client_->disable_program_password(password);
             if (result.ok() && result.value().success) {
                 succeeded_ = true;
-                Toast::show(this, tr("程序密码已禁用"));
+                Toast::show(this, tr("Program password disabled"));
                 emit succeeded();
                 accept();
             } else {
@@ -529,8 +528,8 @@ void ProgramPasswordDialog::on_submit_clicked() {
                     ? QString::fromStdString(result.value().error_message)
                     : QString::fromStdString(result.error().what());
                 set_error(msg.isEmpty()
-                              ? tr("禁用程序密码失败。")
-                              : tr("禁用失败：%1").arg(msg));
+                              ? tr("Could not disable the program password.")
+                              : tr("Disable failed: %1").arg(msg));
             }
             break;
         }
@@ -556,7 +555,7 @@ void ProgramPasswordDialog::update_strength(const QString& password) {
     // 找到 strength_bar_ 下的 4 个 QLabel 分段
     auto segs = strength_bar_->findChildren<QLabel*>();
     for (int i = 0; i < segs.size(); ++i) {
-        // 点亮的前 seg_count 段设置 strength 属性，其余清除属性恢复默认暗色
+        // 点亮的前 seg_count 段Settings strength 属性，其余Clear属性恢复默认暗色
         if (i < seg_count) {
             segs[i]->setProperty("strength", key);
         } else {
@@ -572,7 +571,7 @@ void ProgramPasswordDialog::update_strength(const QString& password) {
         label_class = QStringLiteral("caption");
     } else {
         strength_label_->setText(
-            tr("%1（%2 bit）").arg(strength_text(estimate.level)).arg(estimate.bits));
+            tr("%1 (%2 bits)").arg(strength_text(estimate.level)).arg(estimate.bits));
         label_class = strength_label_class(estimate.level);
     }
     strength_label_->setProperty("cssClass", label_class);
@@ -592,4 +591,4 @@ void ProgramPasswordDialog::close_dialog() {
     reject();
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

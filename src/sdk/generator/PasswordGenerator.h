@@ -15,7 +15,7 @@
 
 #include "IPasswordGenerator.h"
 
-namespace pwdvault::generator {
+namespace yuli::vault::generator {
 
 /// 密码生成器具体实现。
 ///
@@ -36,4 +36,4 @@ public:
     core::StrengthEstimate estimate_strength(const std::string& password) override;
 };
 
-}  // namespace pwdvault::generator
+}  // namespace yuli::vault::generator

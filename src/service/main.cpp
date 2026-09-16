@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -43,12 +44,13 @@
 #include "Messages.h"
 #include "Serializer.h"
 
+#include "AppDataDir.h"
 #include "IpcServer.h"
 #include "ServiceCore.h"
 
 namespace {
 
-constexpr const char* kDefaultPipeName = "\\\\.\\pipe\\PwdVaultService";
+constexpr const char* kDefaultPipeName = "\\\\.\\pipe\\YuliVaultService";
 constexpr auto kKeepaliveTimeout = std::chrono::seconds(30);
 
 /// 全局退出标志，由 Shutdown 命令或 Ctrl+C 触发。
@@ -56,7 +58,7 @@ std::atomic<bool> g_should_exit{false};
 
 /// 全局 IpcServer 指针，供 console ctrl handler 调用 stop()。
 /// 生命周期：start() 前设置，stop() 后清空；console handler 仅在此期间被调用。
-pwdvault::service::IpcServer* g_ipc_server = nullptr;
+yuli::vault::service::IpcServer* g_ipc_server = nullptr;
 
 /// 输出一行日志到 stdout，格式 [YYYY-MM-DD HH:MM:SS.mmm] [LEVEL] message
 void log_line(std::string_view level, std::string_view message) {
@@ -72,14 +74,19 @@ void log_line(std::string_view level, std::string_view message) {
               << "] [" << level << "] " << message << std::endl;
 }
 
-/// 获取 %APPDATA%\PwdVault\ 目录路径。
-/// 使用 _wgetenv 以正确处理 Unicode 路径。
+/// Resolve %APPDATA%\YuliVault\, copying a legacy PwdVault directory if needed.
 std::filesystem::path get_app_data_dir() {
+    std::filesystem::path appdata_root;
     const wchar_t* appdata = _wgetenv(L"APPDATA");
     if (appdata != nullptr && appdata[0] != L'\0') {
-        return std::filesystem::path(appdata) / L"PwdVault";
+        appdata_root = appdata;
     }
-    return std::filesystem::path("PwdVault");
+    std::string migrated;
+    auto dir = yuli::vault::service::resolve_vault_data_dir(appdata_root, &migrated);
+    if (!migrated.empty()) {
+        log_line("INFO", migrated);
+    }
+    return dir;
 }
 
 /// 命令行参数。
@@ -98,7 +105,7 @@ CliArgs parse_args(int argc, char* argv[]) {
         } else if (a == "--install") {
             args.install = true;
         } else if (a == "--help" || a == "-h") {
-            std::cout << "Usage: pwdvault-service [options]\n"
+            std::cout << "Usage: yuli-vault-service [options]\n"
                       << "  --foreground          Run in foreground (default)\n"
                       << "  --install             Register as Windows service (not yet implemented)\n"
                       << "  --pipe-name=<name>    Override pipe name (default: "
@@ -154,7 +161,7 @@ int main(int argc, char* argv[]) {
     auto db_path = app_dir / "vault.db";
     auto meta_path = app_dir / "vault.meta";
 
-    log_line("INFO", "PwdVault service starting");
+    log_line("INFO", "Yuli Vault service starting");
     log_line("INFO", std::string("Data directory: ") + app_dir.string());
     log_line("INFO", std::string("Pipe name: ") + args.pipe_name);
 
@@ -162,28 +169,28 @@ int main(int argc, char* argv[]) {
     //    CryptoEngine 构造时 encryption_key 可为空（ByteSpan{}），仅用于 derive_key
     //    与 generate_key_and_iv；entry 加密用的 encryption_key 由 ServiceCore 在
     //    EnableProgramPassword/Unlock 后通过 set_encryption_key 构造独立的 CryptoEngine 实例。
-    auto crypto = std::make_unique<pwdvault::crypto::CryptoEngine>(pwdvault::core::ByteSpan{});
-    auto storage = std::make_unique<pwdvault::storage::StorageEngine>(db_path);
-    auto generator = std::make_unique<pwdvault::generator::PasswordGenerator>();
+    auto crypto = std::make_unique<yuli::vault::crypto::CryptoEngine>(yuli::vault::core::ByteSpan{});
+    auto storage = std::make_unique<yuli::vault::storage::StorageEngine>(db_path);
+    auto generator = std::make_unique<yuli::vault::generator::PasswordGenerator>();
 
-    pwdvault::service::ServiceCore core(
+    yuli::vault::service::ServiceCore core(
         std::move(crypto), std::move(storage), std::move(generator), meta_path);
 
     // 3. 构造 IPC handler
     //    Shutdown 命令特殊处理：设置退出标志并返回 ShutdownResponse。
     //    其余命令转发给 ServiceCore::handle_request。
-    auto handler = [&core](pwdvault::core::ByteSpan payload,
-                           const pwdvault::protocol::MessageHeader& req_header)
-        -> pwdvault::core::ByteVec {
-        if (req_header.command == pwdvault::protocol::CommandId::Shutdown) {
+    auto handler = [&core](yuli::vault::core::ByteSpan payload,
+                           const yuli::vault::protocol::MessageHeader& req_header)
+        -> yuli::vault::core::ByteVec {
+        if (req_header.command == yuli::vault::protocol::CommandId::Shutdown) {
             g_should_exit.store(true);
             log_line("INFO", "Shutdown requested by client");
-            return pwdvault::protocol::serialize(pwdvault::protocol::ShutdownResponse{});
+            return yuli::vault::protocol::serialize(yuli::vault::protocol::ShutdownResponse{});
         }
         return core.handle_request(payload, req_header);
     };
 
-    pwdvault::service::IpcServer server(args.pipe_name, std::move(handler));
+    yuli::vault::service::IpcServer server(args.pipe_name, std::move(handler));
     g_ipc_server = &server;
 
     // 4. 注册 console ctrl handler
@@ -212,6 +219,6 @@ int main(int argc, char* argv[]) {
     // 7. 优雅关闭
     server.stop();
     g_ipc_server = nullptr;
-    log_line("INFO", "PwdVault service stopped");
+    log_line("INFO", "Yuli Vault service stopped");
     return 0;
 }

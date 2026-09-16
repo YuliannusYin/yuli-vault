@@ -1,6 +1,6 @@
-// pwdvault-ui.rc
+// yuli-vault-ui.rc
 //
-// Windows resource file: embeds a multi-size ICO into pwdvault-ui.exe.
+// Windows resource file: embeds a multi-size ICO into yuli-vault-ui.exe.
 // Affects: the .exe icon shown in Explorer, desktop shortcuts, and the
 // taskbar thumbnail (the runtime taskbar icon is set by Qt's
 // QApplication::setWindowIcon, but Explorer/shortcuts rely on this
@@ -8,4 +8,4 @@
 //
 // IDI_ICON1 is the conventional Windows application icon resource ID.
 
-IDI_ICON1 ICON "pwdvault-ui.ico"
+IDI_ICON1 ICON "yuli-vault-ui.ico"

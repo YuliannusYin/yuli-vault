@@ -2,14 +2,14 @@
 # =============================================================================
 # tests/protocol/CMakeLists.txt
 #
-# PwdVault IPC 协议层单元测试。链接 PwdVault::Protocol 与 GoogleTest。
+# PwdVault IPC 协议层单元测试。链接 YuliVault::Protocol 与 GoogleTest。
 # =============================================================================
 
 add_executable(test_protocol test_protocol.cpp)
 
 target_link_libraries(test_protocol
     PRIVATE
-        PwdVault::Protocol
+        YuliVault::Protocol
         GTest::gtest_main
 )
 

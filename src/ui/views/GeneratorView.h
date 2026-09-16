@@ -2,8 +2,8 @@
 // =============================================================================
 // GeneratorView.h
 //
-// PwdVault 密码生成器视图。配置字符集与长度 → 调用 generate_password → 显示结果
-// 并实时评估强度。支持复制到剪贴板。
+// Yuli Vault PasswordGenerator视图。配置Character set与Length → 调用 generate_password → 显示结果
+// 并实时评估Strong度。支持Copy到剪贴板。
 // =============================================================================
 #pragma once
 
@@ -16,7 +16,7 @@ class QProgressBar;
 class QPushButton;
 class QSpinBox;
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class IpcClient;
 
@@ -27,7 +27,7 @@ public:
     ~GeneratorView() override;
 
 signals:
-    /// 生成密码后触发，MainWindow 可将其传给 InputView 回填。
+    /// Generate password后触发，MainWindow 可将其传给 InputView 回填。
     void password_generated(const QString& password);
 
 private slots:
@@ -36,15 +36,15 @@ private slots:
 
 private:
     void build_ui();
-    /// 异步评估密码强度并更新 strength_bar_ / strength_label_。
-    /// 空密码同步重置 UI；非空则通过 estimate_strength_async 走线程池。
+    /// 异步评估PasswordStrong度并更新 strength_bar_ / strength_label_。
+    /// 空Password同步重置 UI；非空则通过 estimate_strength_async 走线程池。
     void estimate_strength_async(const QString& password);
     /// 统一更新 strength_label_ 文本与 cssClass（触发 QSS 重新评估）。
     void set_strength_label(const QString& text, const QString& css_class);
 
     IpcClient* client_;
 
-    /// 防止生成按钮重复点击（异步调用期间禁用）。
+    /// 防止Generate按钮重复点击（异步调用期间Disable）。
     bool generating_ = false;
 
     QSpinBox* length_spin_ = nullptr;
@@ -61,4 +61,4 @@ private:
     QPushButton* copy_button_ = nullptr;
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

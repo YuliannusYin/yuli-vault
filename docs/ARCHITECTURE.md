@@ -1,390 +1,99 @@
-# PwdVault 架构设计
+# Yuli Vault architecture
 
-本文档描述 PwdVault 的整体架构、模块分层、数据流与密钥层次结构，并给出扩展指南。
-开发者构建步骤请参见 [BUILD.md](BUILD.md)；IPC 协议详细说明请参见 [IPC_PROTOCOL.md](IPC_PROTOCOL.md)；
-安全设计与威胁模型请参见 [SECURITY.md](SECURITY.md)。
+This document describes the dual-process layout, SDK layers, data flow, and key hierarchy. See [BUILD.md](BUILD.md) for how to compile, [IPC_PROTOCOL.md](IPC_PROTOCOL.md) for the pipe protocol, and [SECURITY.md](SECURITY.md) for the threat model.
 
-## 1. 项目目标与设计原则
+## 1. Goals
 
-PwdVault 是一个本地优先的密码管理器，目标是提供透明、可信、可控的密码安全管理体验。
+Yuli Vault is a local-first vault:
 
-设计原则：
+- No cloud by default
+- UI and crypto run in separate processes
+- Engines (`ICryptoEngine`, `IStorageEngine`, `IPasswordGenerator`) are interfaces
+- C++20, `core::Result<T>` instead of exceptions across IPC
+- Binary IPC (little-endian, 16-byte header + payload)
 
-- **零云端**：默认不与任何远程服务通信，所有数据保存在用户本地。
-- **进程隔离**：将 UI（不可信、易崩溃）与敏感操作（加解密、密钥派生）拆分为独立进程，
-  降低 UI 崩溃对敏感内存的影响面。
-- **接口先行**：所有引擎（crypto / storage / generator）以抽象接口（`ICryptoEngine` /
-  `IStorageEngine` / `IPasswordGenerator`）暴露，便于替换实现与单元测试注入。
-- **现代 C++**：C++20，使用 `std::span`、`std::expected` 风格的 `Result<T>` 类型，禁用异常
-  跨进程边界传递。
-- **零拷贝协议**：IPC 使用二进制 TLV 序列化，小端序、定长头部 + 变长负载，避免 JSON
-  解析开销与外部依赖。
-
-## 2. 双进程架构
-
-PwdVault 采用模仿火绒安全软件的双进程架构：
-
-```
-┌──────────────────────┐         ┌──────────────────────────────┐
-│   pwdvault-ui.exe    │         │   pwdvault-service.exe       │
-│   (Qt 6 Widgets)     │         │   (控制台进程)               │
-│                      │         │                              │
-│  ┌────────────────┐  │  命名   │  ┌────────────────────────┐  │
-│  │ MainWindow     │  │  管道   │  │ IpcServer              │  │
-│  │  ├ InputView   │──┼─────────┼──│  ├ listener_loop      │  │
-│  │  ├ PasswordBook│  │ 命名    │  │  └ client_loop (x N)  │  │
-│  │  ├ GeneratorView│ │ 管道    │  └──────────┬─────────────┘  │
-│  │  └ SettingsView│  │ 读写    │             │                │
-│  └─────┬──────────┘  │         │  ┌──────────▼─────────────┐  │
-│        │             │         │  │ ServiceCore            │  │
-│  ┌─────▼──────────┐  │         │  │  ├ handle_request      │  │
-│  │ IpcClient      │  │         │  │  ├ login / unlock /    │  │
-│  │  ├ serialize   │──┼─────────┼──│  │   lock 状态机        │  │
-│  │  ├ write_frame │  │         │  │  └ entry 加解密        │  │
-│  │  └ read_frame  │  │         │  └───┬───────┬───────┬─────┘  │
-│  └────────────────┘  │         │      │       │       │        │
-└──────────────────────┘         │  ┌───▼───┐ ┌─▼────┐ ┌▼──────┐ │
-                                 │  │Crypto │ │Storage│ │Generator│
-                                 │  │Engine │ │Engine│ │       │ │
-                                 │  └───┬───┘ └──┬───┘ └───┬───┘ │
-                                 │      │        │          │     │
-                                 │  ┌───▼──────┐ │          │     │
-                                 │  │vault.meta│ │          │     │
-                                 │  │vault.db  │◄┘          │     │
-                                 │  └──────────┘            │     │
-                                 └──────────────────────────────────┘
-```
-
-### Mermaid 版本
+## 2. Dual process
 
 ```mermaid
 flowchart LR
-    subgraph UI["pwdvault-ui.exe (Qt 6)"]
-        MW[MainWindow]
-        IV[InputView]
-        PB[PasswordBookView]
-        GV[GeneratorView]
-        SV[SettingsView]
-        IC[IpcClient]
-        MW --> IV
-        MW --> PB
-        MW --> GV
-        MW --> SV
-        IV --> IC
-        PB --> IC
-        GV --> IC
-        SV --> IC
-    end
-
-    subgraph SVC["pwdvault-service.exe"]
-        IS[IpcServer]
-        SC[ServiceCore]
-        CE[CryptoEngine]
-        SE[StorageEngine]
-        PG[PasswordGenerator]
-        PPS[ProgramPasswordStore]
-        IS --> SC
-        SC --> CE
-        SC --> SE
-        SC --> PG
-        SC --> PPS
-        PPS --> CE
-    end
-
-    IC <-->|命名管道 \\.\pipe\PwdVaultService| IS
-    SE <-->|SQLite BLOB| DB[("vault.db")]
-    PPS <-->|二进制 meta 文件| META[("vault.meta")]
+  subgraph ui [yuli-vault-ui]
+    VaultView[Vault view login-only]
+    IpcClient
+  end
+  subgraph svc [yuli-vault-service]
+    ServiceCore
+    Migrate[PwdVault folder plus schema v2 to v3]
+    Storage[vault_items SQLite]
+  end
+  VaultView --> IpcClient
+  IpcClient -->|"pipe YuliVaultService"| ServiceCore
+  ServiceCore --> Migrate --> Storage
 ```
 
-## 3. SDK 模块分层
+- **UI** (`yuli-vault-ui.exe`): Qt Widgets. Holds no encryption keys. English source strings; Simplified Chinese via `yuli-vault_zh_CN.qm`.
+- **Service** (`yuli-vault-service.exe`): named pipe `\\.\pipe\YuliVaultService`, SQLite, AES-GCM, Argon2id.
+- Data directory: `%APPDATA%\YuliVault\` (`vault.db`, `vault.meta`).
 
-SDK（`src/sdk/`）以分层抽象组织，每层只依赖下一层：
+### Legacy PwdVault folder
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ service / ui 进程                                          │
-├──────────────────────────────────────────────────────────┤
-│ protocol    IPC 协议层（CommandId / Messages / Serializer）│
-├──────────────────────────────────────────────────────────┤
-│ crypto      AES-256-GCM + Argon2id 引擎                  │
-│ storage     SQLite 持久化 + InMemory 实现                │
-│ generator   密码生成与强度估算                            │
-├──────────────────────────────────────────────────────────┤
-│ core        通用类型（ByteVec/ByteSpan/Result/Error）    │
-│             抽象接口（ICryptoEngine/IStorageEngine/IPasswordGenerator）│
-└──────────────────────────────────────────────────────────┘
-```
+`resolve_vault_data_dir` (`src/service/AppDataDir.h`):
 
-| 模块        | 路径                  | 类型               | 职责                                  |
-|-------------|------------------------|--------------------|----------------------------------------|
-| core        | `src/sdk/core/`        | INTERFACE 库       | 核心类型、错误码、抽象接口             |
-| crypto      | `src/sdk/crypto/`      | STATIC 库          | AES-256-GCM 加密、Argon2id 派生        |
-| storage     | `src/sdk/storage/`     | STATIC 库          | SQLite 持久化、内存实现                |
-| generator   | `src/sdk/generator/`   | STATIC 库          | 密码生成（BCryptGenRandom）、强度估算  |
-| protocol    | `src/sdk/protocol/`     | STATIC 库          | IPC 命令枚举、消息结构、二进制序列化   |
-| **聚合**    | `PwdVault::Sdk`        | INTERFACE 别名     | 上述五子模块统一引用入口               |
+1. Use `%APPDATA%\YuliVault\` if it exists.
+2. Else copy `%APPDATA%\PwdVault\` into `YuliVault\` (keep the original) and write `migrated_from_pwdvault`.
+3. Else create `YuliVault\`.
 
-CMake 目标命名约定：`pwdvault-<module>`（小写连字符），别名 `PwdVault::<Module>`（驼峰）。
+## 3. Item model
 
-## 4. 数据流
+`VaultItem` (`src/sdk/core/Types.h`):
 
-以 UI 调用 `add_entry` 为例，完整的字节级数据流：
+- Header (plaintext on disk): `id`, `type`, `title`, `tags`, timestamps
+- Type payload: login fields (`account`, `username`, `password`, `website`, `note`) encoded by `encode_item_payload`
+- `VaultItemType`: Login (1), SecureNote (2), Card (3), Identity (4), Custom (5)
+- `PasswordEntry` is a compatibility alias of `VaultItem`
 
-```
-1. UI 视图层（InputView / EditEntryDialog）
-   构造 core::PasswordEntry{
-     entry_name, account, username, password, website, note, tags
-   }
-        │
-        ▼
-2. UI IpcClient::add_entry(entry)
-   protocol::serialize(AddEntryRequest{entry})  →  ByteVec payload
-   protocol::pack_message(CommandId::AddEntry, request_id, payload)
-        →  ByteVec frame = MessageHeader(16) + payload
-        │
-        ▼
-3. 命名管道 \\.\pipe\PwdVaultService
-   WriteFile(frame) → 等待 ReadFile(响应)
-        │
-        ▼
-4. service IpcServer::client_loop
-   ReadFile → parse_header → ByteSpan payload + MessageHeader header
-        │
-        ▼
-5. ServiceCore::handle_request(payload, header)
-   switch (header.command) {
-     case CommandId::AddEntry:
-       deserialize<AddEntryRequest>(payload)
-       → resolve_entry_tags(entry)         // 自动创建 id=0 的新标签并回写关联
-       → encrypt_entry(entry)
-         // 加密模式：用 entry_crypto_ 加密 password 字段
-         //   → AES-256-GCM encrypt → [IV(12) || ciphertext || tag(16)]
-         //   → 拆分 iv / password(密文) / tag
-         // 明文模式：password 保持明文，iv / tag 留空
-       → storage_->add_entry(encrypted_entry)
-         → SQLite INSERT INTO passwords(...)
-         → set_entry_tags_unlocked(entry.id, tag_ids)  // 写入 entry_tags 关联
-       → 构造 AddEntryResponse{明文 entry + 分配的 id + 时间戳}
-       → protocol::serialize(AddEntryResponse) → ByteVec response_payload
-   }
-        │
-        ▼
-6. service IpcServer
-   构造响应 header（command/request_id 与请求一致）
-   WriteFile → 写回管道
-        │
-        ▼
-7. UI IpcClient
-   ReadFile → parse_header → read payload
-   → 优先 deserialize<AddEntryResponse>
-   → 失败则 deserialize<ErrorResponse>，转 core::Error 返回
-        │
-        ▼
-8. UI 视图层
-   add_entry Result 成功 → 显示新条目
-   失败 → 弹出错误提示
-```
+This release only edits Login items. Unknown or non-login types still list with a type badge; opening them asks the user to upgrade.
 
-## 5. 程序密码与密钥层次结构
+## 4. Schema v3
 
-PwdVault 支持两种工作模式：
+`settings.schema_version = 3`. Table `vault_items`:
 
-- **明文模式**（默认，未启用程序密码）：`vault.db` 中 `password` 字段以明文 BLOB 存储，
-  `iv` / `tag` 列为空 BLOB，**不生成** `vault.meta` 文件。ServiceCore 启动时自动
-  `unlocked=true`，UI 直接进入主界面。所有 CRUD 操作无需解锁。
-- **加密模式**（已启用程序密码）：采用三层密钥派生保护用户数据，需 `Unlock` 后才能访问。
+| Column | Notes |
+| --- | --- |
+| `type` | `VaultItemType` |
+| `title` | plaintext |
+| `payload` | encoded type fields; ciphertext when a program password is on |
+| `iv` / `tag` | AES-GCM; empty in plaintext mode |
+| timestamps | unix seconds |
 
-两种模式可在设置中通过 `EnableProgramPassword` / `DisableProgramPassword` 命令相互切换，
-切换时 service 会对所有现有条目执行批量重加密 / 重解密。
+`entry_tags` points at `vault_items`. `tags`, `generated_passwords`, and `settings` stay.
 
-加密模式下的密钥派生层次：
+**v2 → v3** (`passwords` table, password-only ciphertext, other columns plaintext):
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 用户程序密码（program_password）                             │
-│   - 用户在 UnlockView / ProgramPasswordDialog 输入的明文口令│
-│   - 仅在 UI 内存中短暂存在，IPC 传输后由 service 持有        │
-└────────────────────────────────┬────────────────────────────┘
-                                 │ Argon2id（libsodium）
-                                 │   ops_limit = INTERACTIVE
-                                 │   mem_limit = INTERACTIVE
-                                 │   salt = 16B（持久化于 vault.meta）
-                                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│ KEK（Key Encryption Key，32 字节）                          │
-│   - 仅存在于 service 进程内存                                │
-│   - 用于加密 / 解密 encryption_key                          │
-│   - 函数返回前用 sodium_memzero 清零                       │
-└────────────────────────────────┬────────────────────────────┘
-                                 │ AES-256-GCM（KEK 作为密钥）
-                                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│ encryption_key（32 字节，entry 加密用对称密钥）              │
-│   - 在 service 内存中存活（unlock 后 → lock 前）            │
-│   - 持久化为 [IV(12) || ciphertext(32) || tag(16)] 于 vault.meta│
-│   - lock() 或进程退出时 sodium_memzero 清零                 │
-│   - 修改程序密码时仅重新包装本密钥，条目无需重新加密         │
-└────────────────────────────────┬────────────────────────────┘
-                                 │ AES-256-GCM（每个 entry 独立 IV）
-                                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 加密后的 entry.password                                     │
-│   - 持久化于 vault.db 的 passwords 表                        │
-│   - iv / password(密文) / tag 三段分别存于不同列             │
-└─────────────────────────────────────────────────────────────┘
-```
+- No `vault.meta`: migrate immediately on service start
+- With `vault.meta`: keep v2 while locked; after a successful Unlock, re-encrypt payloads in one pass and drop `passwords`
+- Do not DROP/recreate in a way that discards user rows
 
-### Meta 文件格式
+## 5. Encryption
 
-`vault.meta` 采用自定义二进制格式（仅加密模式存在）：
+When a program password is enabled, ServiceCore encrypts the **entire payload blob**, not only the password. Title, type, and tags remain searchable without the key. Account, username, website, and notes are filtered in memory after decrypt.
 
-| 偏移 | 长度      | 字段             | 说明                                       |
-|------|-----------|------------------|--------------------------------------------|
-| 0    | 4         | magic            | `0x4D4B5650`（'P','V','K','M' 小端）       |
-| 4    | 2         | version          | `1`                                        |
-| 6    | 4         | salt_len         | `16`                                       |
-| 10   | 16        | salt             | Argon2id 派生盐                            |
-| 26   | 4         | blob_len         | `60`（12 IV + 32 密文 + 16 tag）           |
-| 30   | blob_len  | encrypted_blob   | `[IV(12) || ciphertext(32) || tag(16)]`    |
+`vault.meta` still stores salt + Argon2id-wrapped `encryption_key` (KEK). Magic bytes of `vault.meta` are unchanged so copied PwdVault files open.
 
-### 模式切换流程
+IPC protocol **version is 2** (VaultItem gained a type byte). UI and service ship together.
 
-**EnableProgramPassword（明文 → 加密）**：
-1. 调用 `ProgramPasswordStore::initialize`：生成 salt + KEK + encryption_key，写入 vault.meta
-2. ServiceCore 设置 `encryption_key`，切换到加密模式
-3. 遍历所有现有明文条目，逐条用 AES-256-GCM 加密后 update
-4. 同步重新加密所有生成记录（`generated_passwords` 表）——通过
-   `IStorageEngine::update_generated_record` 仅更新 password/iv/tag 字段，
-   保留 id 与 created_at 不变（避免丢失原始生成时间）
-5. 任一步骤失败：回滚（删除 vault.meta，恢复明文条目与记录）
+## 6. SDK layout
 
-**DisableProgramPassword（加密 → 明文）**：
-1. 用提供的程序密码验证身份（解锁状态）
-2. 遍历所有加密条目，逐条解密为明文后 update（iv/tag 清空）
-3. 同步重新解密所有生成记录——同样走 `update_generated_record`，保留 created_at
-4. 调用 `ProgramPasswordStore::destroy` 删除 vault.meta
-5. 切换到明文模式，`unlocked=true`
+| Library | Target alias | Role |
+| --- | --- | --- |
+| `yuli-vault-sdk-core` | `YuliVault::SdkCore` | header-only types |
+| `yuli-vault-crypto` | `YuliVault::Crypto` | AES-GCM + Argon2id |
+| `yuli-vault-storage` | `YuliVault::Storage` | SQLite + in-memory |
+| `yuli-vault-generator` | `YuliVault::Generator` | generator |
+| `yuli-vault-protocol` | `YuliVault::Protocol` | IPC |
+| aggregate | `YuliVault::Sdk` | all of the above |
 
-**ChangeProgramPassword（仅加密模式）**：
-1. 验证 old_password
-2. 调用 `ProgramPasswordStore::change_password`：用新密码重新派生 KEK，重新包装 encryption_key
-3. encryption_key 本身不变，**条目与生成记录无需重新加密**
+## 7. Extending
 
-### 生成记录与设置存储
-
-除 `passwords` 表外，`vault.db` 还包含四张辅助表：
-
-- **`generated_passwords`**：保存密码生成器历史记录。字段与 `passwords` 同构
-  （id / password BLOB / length / iv / tag / created_at）。`generate_password`
-  成功后 service 自动追加一条记录；通过 `set_generator_limit` 配置上限后
-  立即按 `created_at DESC, id DESC` 保留最新 N 条，其余删除（`limit=0` 表示无限制）。
-- **`tags`**：标签字典表（id / name UNIQUE / color / created_at / updated_at）。
-  `name` 在全库范围内唯一（大小写敏感）；`color` 为可选的 `#RRGGBB` 颜色。
-- **`entry_tags`**：条目与标签多对多关联表（entry_id / tag_id，外键 `ON DELETE CASCADE`）。
-  删除 Entry 或 Tag 时自动清理关联；`set_entry_tags` 为全量替换语义。
-- **`settings`**：通用 KV 配置表（key TEXT PRIMARY KEY, value TEXT）。当前用于
-  持久化生成器历史记录上限（key=`generator.limit`）与 schema 版本号
-  （key=`schema_version`，当前值为 `2`），未来可扩展承载其他用户偏好。
-
-#### Schema 版本管理
-
-`StorageEngine::init_schema` 启动时读取 `settings.schema_version`：
-- 不存在或值不为 `2` → 删除旧 `passwords` 表，按新 schema 重建（含 `entry_name` /
-  `account` / `username` / `tags` 等新字段），并新建 `tags` / `entry_tags` 表，
-  写入 `schema_version='2'`。
-- 值为 `2` → 跳过重建，直接复用现有 schema。
-
-> **不向后兼容**：schema 升级会清空旧 `passwords` 表数据。3.2.0 起移除了
-> 旧 Python 版（Fernet）数据迁移工具，需要从旧版迁移数据的用户请使用 3.1.x 版本
-> 完成迁移后再升级到 3.2.0+。
-
-加密约定：生成记录的 password 字段在加密模式下用 `entry_crypto_` 加密为
-`[IV(12) || ciphertext || tag(16)]`，与 `entry.password` 同构；明文模式下
-iv / tag 为空、password 为明文 BLOB。详见
-[IPC_PROTOCOL.md 第 3.4 节](IPC_PROTOCOL.md#34-密码生成与强度评估0x03xx)。
-
-标签数据本身**不加密**（`tags` / `entry_tags` 表为明文存储），仅 `passwords.password`
-与 `generated_passwords.password` 字段受 AES-256-GCM 保护。
-
-## 6. 安全设计
-
-详见 [SECURITY.md](SECURITY.md)。要点：
-
-- **KEK 仅内存**：KEK 在 `ProgramPasswordStore::initialize / unlock / change_password` 函数返回前通过 `sodium_memzero` 清零。
-- **敏感数据清零**：encryption_key、KEK、派生密钥、明文密码字符串均用 `sodium_memzero` 清零。
-- **GCM 认证**：每条 entry 的 password 字段独立 IV + tag，GCM 校验失败即拒绝解密。
-- **常量时间比较**：`CryptoEngine::verify_password` 使用 `sodium_memcmp`，避免时序侧信道。
-- **解锁限速**：连续 5 次程序密码错误后锁定 5 分钟，期间任何 unlock 尝试直接返回失败。
-- **自动退出**：service 进程 30 秒无客户端连接即自动退出，缩小敏感数据存活窗口。
-- **明文模式权衡**：明文模式便利但无加密保护，仅适用于低敏感场景；启用程序密码后所有数据
-  落盘前均经 AES-256-GCM 加密。
-
-## 7. 可扩展性
-
-### 7.1 新增 IPC 命令
-
-按以下步骤追加新命令（如 `Backup`）：
-
-1. **Commands.h**：在 `CommandId` 枚举中追加新值（保持值唯一且不复用旧值）：
-   ```cpp
-   Backup = 0x0500,  // 新命令分组 0x05xx（0x04xx 已被 Tag 命令占用）
-   ```
-2. **Messages.h**：定义请求 / 响应结构：
-   ```cpp
-   struct BackupRequest { std::string target_path; };
-   struct BackupResponse { int64_t bytes_copied = 0; };
-   ```
-3. **Serializer.h / Serializer.cpp**：追加 `serialize<BackupRequest>` /
-   `serialize<BackupResponse>` 与对应 `deserialize` 特化声明 + 实现。
-4. **ServiceCore.h / ServiceCore.cpp**：
-   - 在 `handle_request` switch 中追加 `case CommandId::Backup: return handle_backup(payload);`
-   - 实现 `handle_backup(core::ByteSpan payload)` 私有方法。
-5. **IpcClient.h / IpcClient.cpp**：追加 `Result<BackupResponse> backup(const std::string& path);`。
-6. **测试**：在 `tests/protocol/test_protocol.cpp` 追加 round-trip 用例；
-   在 `tests/integration/test_e2e_flow.cpp` 追加端到端用例。
-
-### 7.2 新增引擎实现
-
-替换存储引擎为例（如改用 LevelDB）：
-
-1. 在 `src/sdk/storage/` 下新增 `LevelDBStorageEngine.h` 与 `.cpp`，
-   继承 `core::IStorageEngine` 接口。
-2. 在 `src/sdk/storage/CMakeLists.txt` 中将新源文件加入 `pwdvault-storage` STATIC 库的源列表，
-   并通过 vcpkg 添加 LevelDB 依赖。
-3. 在 `src/service/main.cpp` 中将 `StorageEngine(db_path)` 替换为
-   `LevelDBStorageEngine(db_path)`，构造注入 `ServiceCore`。
-4. 重新运行 `ctest` 验证全部测试用例仍然通过（接口契约保证可替换性）。
-
-### 7.3 新增 UI 视图
-
-1. 在 `src/ui/views/` 下新增 `XxxView.h` 与 `.cpp`，继承 `QWidget`。
-2. 在 `src/ui/CMakeLists.txt` 中将新源文件加入 `pwdvault-ui` 目标。
-3. 在 `MainWindow` 中添加对应 Tab/侧边栏入口。
-4. 视图通过 `IpcClient` 与 service 通信，不直接持有引擎实现。
-
-### 7.4 UI 强度展示集中化
-
-`src/ui/StrengthUtil.h` / `.cpp` 集中管理 `core::StrengthLevel` → UI 属性的映射，
-所有展示强度的视图（GeneratorView / InputView / PasswordBookView / EditEntryDialog /
-ProgramPasswordDialog）必须通过 `StrengthUtil` 获取：
-
-| 函数                      | 用途                                |
-|---------------------------|-------------------------------------|
-| `strength_text`           | 等级中文文案（极弱/弱/中/强/极强） |
-| `strength_qss_key`        | 强度条 QSS 属性值（veryweak 等）    |
-| `strength_color`          | 颜色 hex                            |
-| `strength_label_class`    | 文本标签 cssClass（error/info 等）  |
-| `strength_badge_class`    | badge cssClass（badgeSuccess 等）   |
-| `strength_segments`       | 进度条点亮段数（0..4）              |
-
-新增展示强度的 UI 控件时，**不要**在各视图内硬编码阈值判断，统一调用本工具函数。
-QSS 中 5 级 cssClass（`error`/`warning`/`info`/`success`/`veryStrong`）与
-`QProgressBar[strength="..."]` 属性选择器必须在 `dark.qss` 与 `light.qss` 双主题
-同步定义。
-
-## 8. 相关文档
-
-- [BUILD.md](BUILD.md)：开发者构建指南与环境配置
-- [IPC_PROTOCOL.md](IPC_PROTOCOL.md)：IPC 协议帧格式与命令列表
-- [SECURITY.md](SECURITY.md)：威胁模型与加密方案
-- [../README.md](../README.md)：项目概览
+- New IPC commands: follow the checklist in [AGENTS.md](../AGENTS.md)
+- New item editors: keep `VaultItemType`, add UI later; do not change schema for Login-only work
+- Do not modify `legacy-python/`

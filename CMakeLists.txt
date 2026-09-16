@@ -1,10 +1,10 @@
 # coding: utf-8
 # =============================================================================
-# PwdVault - 顶层 CMake 构建配置
+# Yuli Vault - top-level CMake build
 #
 # 密码管理器项目（C++20 + Qt 6），模仿火绒安全软件的工程化架构：
-#   - UI 进程（pwdvault-ui.exe，Qt Widgets）
-#   - 服务进程（pwdvault-service.exe，后台逻辑）
+#   - UI 进程（yuli-vault-ui.exe，Qt Widgets）
+#   - 服务进程（yuli-vault-service.exe，后台逻辑）
 #   - SDK 模块（core/storage/crypto/generator/protocol）
 #   - 单元测试（GoogleTest）
 #
@@ -19,9 +19,9 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-project(PwdVault
-    VERSION 3.4.0
-    DESCRIPTION "PwdVault - 模仿火绒安全软件架构的密码管理器"
+project(YuliVault
+    VERSION 4.0.0
+    DESCRIPTION "Yuli Vault - local encrypted e-vault"
     LANGUAGES CXX
 )
 
@@ -30,7 +30,7 @@ project(PwdVault
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-    message(STATUS "PwdVault: 未指定构建类型，默认使用 Release")
+    message(STATUS "Yuli Vault: defaulting CMAKE_BUILD_TYPE to Release")
 endif()
 
 # 提供多配置生成器（如 Visual Studio）可选配置类型
@@ -110,7 +110,7 @@ find_package(SQLite3 REQUIRED)
 find_package(GTest REQUIRED)
 
 # 向父作用域暴露常用变量（供 src/ 子目录使用）
-set(PWDVAULT_QT_LIBS Qt6::Widgets Qt6::Network Qt6::Concurrent Qt6::Svg CACHE INTERNAL "Qt 6 链接库")
+set(YULI_VAULT_QT_LIBS Qt6::Widgets Qt6::Network Qt6::Concurrent Qt6::Svg CACHE INTERNAL "Qt 6 链接库")
 
 # -----------------------------------------------------------------------------
 # 8. 启用测试
@@ -123,13 +123,13 @@ enable_testing()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/CMakeLists.txt")
     add_subdirectory(src)
 else()
-    message(WARNING "PwdVault: src/CMakeLists.txt 不存在，跳过 src 子目录")
+    message(WARNING "Yuli Vault: src/CMakeLists.txt is missing")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
     add_subdirectory(tests)
 else()
-    message(STATUS "PwdVault: tests/ 目录暂不存在，跳过测试子目录（后续添加）")
+    message(STATUS "Yuli Vault: tests/ is missing; skipping tests")
 endif()
 
 # -----------------------------------------------------------------------------
@@ -151,7 +151,7 @@ elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/legacy-python/LICENSE")
             DESTINATION .
             COMPONENT Runtime
             RENAME LICENSE)
-    message(STATUS "PwdVault: 根目录 LICENSE 不存在，使用 legacy-python/LICENSE 作为安装源")
+    message(STATUS "Yuli Vault: using legacy-python/LICENSE")
 endif()
 
 # 安装 README 文件（若存在）
@@ -160,9 +160,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
             DESTINATION .
             COMPONENT Runtime)
 endif()
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/README.zh-CN.md")
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/README.zh-CN.md"
+            DESTINATION .
+            COMPONENT Runtime)
+endif()
 
 message(STATUS "")
-message(STATUS "========== PwdVault 配置摘要 ==========")
+message(STATUS "========== Yuli Vault ==========")
 message(STATUS "  项目版本       : ${PROJECT_VERSION}")
 message(STATUS "  C++ 标准       : ${CMAKE_CXX_STANDARD}")
 message(STATUS "  构建类型       : ${CMAKE_BUILD_TYPE}")
@@ -195,19 +200,30 @@ find_program(ISCC_EXECUTABLE
     DOC "Inno Setup 编译器路径"
 )
 if(ISCC_EXECUTABLE)
-    message(STATUS "PwdVault: 检测到 Inno Setup 编译器 -> ${ISCC_EXECUTABLE}")
+    message(STATUS "Yuli Vault: Inno Setup compiler -> ${ISCC_EXECUTABLE}")
 else()
-    message(STATUS "PwdVault: 未检测到 Inno Setup 编译器（iscc.exe），"
-                   "package_inno 目标将不可用。请安装 Inno Setup 6 后重试。")
+    message(STATUS "Yuli Vault: Inno Setup compiler (iscc.exe) not found; "
+                   "package_inno will be unavailable.")
 endif()
 
-# 自定义打包目标：调用 iscc.exe 编译 packaging/pwdvault.iss
-# - WORKING_DIRECTORY 指向项目根目录，使 .iss 内的相对路径（..\build\bin\Release\）生效
-# - DEPENDS 确保两个可执行目标先构建完成
-add_custom_target(package_inno
-    COMMAND ${ISCC_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/packaging/pwdvault.iss"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    DEPENDS pwdvault-ui pwdvault-service
-    COMMENT "PwdVault: 调用 Inno Setup 编译安装包（packaging/pwdvault.iss）..."
-    VERBATIM
-)
+# 自定义打包目标：先用 windeployqt 填满 build/bin/<config>，再编译 .iss。
+# WORKING_DIRECTORY 指向项目根目录，使 .iss 内的相对路径生效。
+if(YULI_VAULT_WINDEPLOYQT)
+    add_custom_target(package_inno
+        COMMAND "${YULI_VAULT_WINDEPLOYQT}" ${YULI_VAULT_WINDEPLOYQT_ARGS}
+                "$<TARGET_FILE:yuli-vault-ui>"
+        COMMAND ${ISCC_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/packaging/yuli-vault.iss"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DEPENDS yuli-vault-ui yuli-vault-service
+        COMMENT "Yuli Vault: windeployqt + Inno Setup (packaging/yuli-vault.iss)..."
+        VERBATIM
+    )
+else()
+    add_custom_target(package_inno
+        COMMAND ${ISCC_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/packaging/yuli-vault.iss"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DEPENDS yuli-vault-ui yuli-vault-service
+        COMMENT "Yuli Vault: compiling installer (packaging/yuli-vault.iss)..."
+        VERBATIM
+    )
+endif()

@@ -12,7 +12,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 void Toast::show(QWidget* parent, const QString& text, int duration_ms) {
     // 自我管理生命周期：构造时即启动自动消失计时器，无需调用方 delete。
@@ -31,7 +31,7 @@ Toast::Toast(QWidget* parent, const QString& text, int duration_ms)
     setAttribute(Qt::WA_ShowWithoutActivating);
     // 允许半透明背景（圆角外侧区域透明，避免矩形灰边）。
     setAttribute(Qt::WA_TranslucentBackground);
-    // 显式允许接收鼠标事件（点击关闭）。
+    // 显式允许接收鼠标事件（点击Close）。
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setFocusPolicy(Qt::NoFocus);
 
@@ -48,7 +48,7 @@ Toast::Toast(QWidget* parent, const QString& text, int duration_ms)
     layout->setSpacing(0);
     layout->addWidget(label_);
 
-    // 视觉：圆角 6px、半透明背景、1px 边框，按主题取色。
+    // 视觉：圆角 6px、半透明背景、1px 边框，按Theme取色。
     // 用内联 setStyleSheet（Toast 是临时浮层，不属于 QSS 体系管理的常规控件）。
     const bool dark = Theme::is_dark();
     const QString bg = dark ? QStringLiteral("rgba(20,24,32,0.92)")
@@ -74,7 +74,7 @@ Toast::Toast(QWidget* parent, const QString& text, int duration_ms)
     // 尺寸：根据内容自适应（layout + label sizeHint）。
     adjustSize();
 
-    // 位置：parent 顶部居中，纵向下方 80px。
+    // 位置：parent 顶部居Medium，纵向下方 80px。
     // 用 mapToGlobal 兼容 parent 为顶层窗口或嵌套 widget 两种情况。
     if (parent) {
         const QPoint top_left = parent->mapToGlobal(QPoint(0, 0));
@@ -84,7 +84,7 @@ Toast::Toast(QWidget* parent, const QString& text, int duration_ms)
     }
 
     // 自动消失：duration_ms 后 deleteLater。
-    // 用 this 作为 context，若 toast 已被点击销毁，回调不会再触发（安全）。
+    // 用 this 作为 context，若 toast 已被点击销毁，回调不会再触发（Security）。
     QTimer::singleShot(duration_ms, this, [this] { this->deleteLater(); });
 }
 
@@ -96,4 +96,4 @@ void Toast::mousePressEvent(QMouseEvent* event) {
     QWidget::mousePressEvent(event);
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

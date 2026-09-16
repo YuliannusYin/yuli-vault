@@ -35,7 +35,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 
-namespace pwdvault::generator {
+namespace yuli::vault::generator {
 
 namespace {
 
@@ -274,8 +274,7 @@ core::StrengthEstimate PasswordGenerator::estimate_strength(const std::string& p
         }
         if (max_run >= 3) {
             penalty_factor -= kPerPatternPenalty;
-            result.warnings.push_back(
-                "检测到 " + std::to_string(max_run) + " 个连续重复字符");
+            result.warnings.push_back("repeat:" + std::to_string(max_run));
         }
     }
 
@@ -293,7 +292,7 @@ core::StrengthEstimate PasswordGenerator::estimate_strength(const std::string& p
             static_cast<double>(max_count) / static_cast<double>(password.size());
         if (ratio > 0.5 && password.size() >= 4) {
             penalty_factor -= kPerPatternPenalty;
-            result.warnings.push_back("字符分布不均（同一字符占比过高）");
+            result.warnings.push_back("uneven");
         }
     }
 
@@ -318,8 +317,7 @@ core::StrengthEstimate PasswordGenerator::estimate_strength(const std::string& p
         }
         if (max_seq >= 3) {
             penalty_factor -= kPerPatternPenalty;
-            result.warnings.push_back(
-                "检测到 " + std::to_string(max_seq) + " 位顺序字符序列");
+            result.warnings.push_back("sequential:" + std::to_string(max_seq));
         }
     }
 
@@ -365,8 +363,7 @@ core::StrengthEstimate PasswordGenerator::estimate_strength(const std::string& p
         }
         if (hit) {
             penalty_factor -= kPerPatternPenalty;
-            result.warnings.push_back(
-                "检测到键盘序列（长度 " + std::to_string(hit_len) + "）");
+            result.warnings.push_back("keyboard:" + std::to_string(hit_len));
         }
     }
 
@@ -380,4 +377,4 @@ core::StrengthEstimate PasswordGenerator::estimate_strength(const std::string& p
     return result;
 }
 
-}  // namespace pwdvault::generator
+}  // namespace yuli::vault::generator

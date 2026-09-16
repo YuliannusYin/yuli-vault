@@ -2,7 +2,7 @@
 // =============================================================================
 // PasswordBookModel.h
 //
-// 密码本左侧列表的 QAbstractListModel 实现。管理
+// Vault左侧列表的 QAbstractListModel 实现。管理
 // std::vector<core::PasswordEntry>，通过 Qt::UserRole 暴露完整 entry 给
 // delegate 自绘，通过 Qt::ToolTipRole 暴露完整 entry_name 用于长名称 tooltip。
 // =============================================================================
@@ -13,7 +13,7 @@
 
 #include "Types.h"
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class PasswordBookModel : public QAbstractListModel {
     Q_OBJECT
@@ -36,4 +36,4 @@ private:
     std::vector<core::PasswordEntry> entries_;
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

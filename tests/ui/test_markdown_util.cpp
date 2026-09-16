@@ -15,7 +15,7 @@
 
 #include <QString>
 
-using pwdvault::ui::markdown_to_html;
+using yuli::vault::ui::markdown_to_html;
 
 // =============================================================================
 // escape_html 行为

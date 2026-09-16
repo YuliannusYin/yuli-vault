@@ -11,7 +11,7 @@ add_executable(test_password_generator
 
 target_link_libraries(test_password_generator
     PRIVATE
-        PwdVault::Generator
+        YuliVault::Generator
         GTest::gtest_main
 )
 

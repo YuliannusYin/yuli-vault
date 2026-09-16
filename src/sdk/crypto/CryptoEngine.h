@@ -21,7 +21,7 @@
 #include "ICryptoEngine.h"
 #include "Types.h"
 
-namespace pwdvault::crypto {
+namespace yuli::vault::crypto {
 
 /// 加密引擎实现。基于 AES-256-GCM（OpenSSL EVP）与 Argon2id（libsodium）。
 class CryptoEngine : public core::ICryptoEngine {
@@ -64,4 +64,4 @@ private:
     core::ByteVec encryption_key_;
 };
 
-}  // namespace pwdvault::crypto
+}  // namespace yuli::vault::crypto

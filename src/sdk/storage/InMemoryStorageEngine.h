@@ -26,7 +26,7 @@
 
 #include "IStorageEngine.h"
 
-namespace pwdvault::storage {
+namespace yuli::vault::storage {
 
 class InMemoryStorageEngine : public core::IStorageEngine {
 public:
@@ -43,6 +43,11 @@ public:
     core::Result<std::vector<core::PasswordEntry>> search_entries(
         const core::SearchQuery& query) override;
     core::Result<std::vector<core::PasswordEntry>> list_entries() override;
+    int schema_version() override { return 3; }
+    core::Error migrate_v2_to_v3(
+        const std::function<core::Result<core::VaultItem>(core::VaultItem)>&) override {
+        return core::Error{};
+    }
 
     core::Error begin_transaction() override;
     core::Error commit_transaction() override;
@@ -122,4 +127,4 @@ private:
     static int64_t now_seconds();
 };
 
-}  // namespace pwdvault::storage
+}  // namespace yuli::vault::storage

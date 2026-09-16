@@ -24,13 +24,13 @@
 #include "core/Types.h"
 #include "protocol/Messages.h"
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 class ICryptoEngine;
 class IStorageEngine;
 class IPasswordGenerator;
 }
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 class ProgramPasswordStore;
 
@@ -102,14 +102,16 @@ private:
     core::Result<std::vector<core::Tag>> resolve_entry_tags(
         const std::vector<core::Tag>& tags);
 
-    /// 加密 entry.password，填充 iv/tag 字段。
-    /// 明文模式（password_enabled_==false）下直接返回 entry 不做加密。
-    /// \return 成功时返回填充后的 entry（password 为密文）；失败返回 Error
-    core::Result<core::PasswordEntry> encrypt_entry(core::PasswordEntry entry) const;
+    /// 加密整份类型载荷，填充 payload/iv/tag。
+    /// 明文模式（password_enabled_==false）下写入未加密 payload。
+    core::Result<core::VaultItem> encrypt_entry(core::VaultItem entry) const;
 
-    /// 解密 entry.password，清空 iv/tag。
-    /// 明文模式下直接返回 entry 不做解密。
-    core::Result<core::PasswordEntry> decrypt_entry(core::PasswordEntry entry) const;
+    /// 解密 payload 并还原类型字段。明文模式下尝试解码 payload。
+    core::Result<core::VaultItem> decrypt_entry(core::VaultItem entry) const;
+
+    /// Upgrade a copied PwdVault v2 database to payload-encrypted v3 items.
+    /// Must run while unlocked (encrypted vaults need the KEK). Caller holds mutex_.
+    core::Error migrate_legacy_schema_unlocked();
 
     /// 加密 GeneratedPasswordRecord.password，填充 iv/tag。
     /// 明文模式下直接返回 record 不做加密。
@@ -154,4 +156,4 @@ private:
     std::chrono::steady_clock::time_point lock_until_{};
 };
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

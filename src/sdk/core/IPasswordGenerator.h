@@ -12,7 +12,7 @@
 #include "Result.h"
 #include "Types.h"
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 
 /// 密码生成器抽象接口。
 class IPasswordGenerator {
@@ -42,4 +42,4 @@ public:
 // 纯虚析构函数的定义：链接时需要（C++ 标准要求纯虚析构函数有定义）。
 inline IPasswordGenerator::~IPasswordGenerator() = default;
 
-}  // namespace pwdvault::core
+}  // namespace yuli::vault::core

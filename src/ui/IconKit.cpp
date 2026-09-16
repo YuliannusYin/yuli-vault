@@ -14,7 +14,7 @@
 #include <QSvgRenderer>
 #include <QTimer>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 QColor icon_color(IconRole role) {
     const bool dark = Theme::is_dark();
@@ -32,7 +32,7 @@ QColor icon_color(IconRole role) {
             // 危险红：dark #f56363 / light #dc2626
             return dark ? QColor(0xf5, 0x63, 0x63) : QColor(0xdc, 0x26, 0x26);
         case IconRole::Success:
-            // 成功绿：dark #2bd576 / light #1f9d57
+            // Success绿：dark #2bd576 / light #1f9d57
             return dark ? QColor(0x2b, 0xd5, 0x76) : QColor(0x1f, 0x9d, 0x57);
         case IconRole::Info:
             // 信息蓝：dark #3b6bff / light #2f5fff
@@ -113,16 +113,16 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// 缓存：避免主题切换时重复 new QSvgRenderer + parse SVG
+// 缓存：避免Theme切换时重复 new QSvgRenderer + parse SVG
 // ---------------------------------------------------------------------------
 //
 // 设计要点：
 //   - icons_:    key = "svg_path|HexArgb"，value = QIcon
 //     公开接口 tinted_icon 返回的 QIcon 会被业务方缓存（如 btn->setIcon），
-//     在主题未变时多次调用应返回同一 QIcon 实例。
+//     在Theme未变时多次调用应返回同一 QIcon 实例。
 //   - pixmaps_:  key = "svg_path|HexArgb|WxH"，value = QPixmap
-//     pixmap 与 size 强相关，size 进入 key。
-//   - 主题切换检测：用 last_dark 记录上次渲染时的主题，每次 tinted_* 入口
+//     pixmap 与 size Strong相关，size 进入 key。
+//   - Theme切换检测：用 last_dark 记录上次渲染时的Theme，每次 tinted_* 入口
 //     检查 Theme::is_dark() != last_dark，是则清空两个缓存。这是无 connect 的
 //     轻量方案，避免 IconKit 自由函数依赖某个 QObject 实例。
 //   - TintedIconEngine::pixmap 不走缓存（Qt 框架按需调用，难以拦截），但调用
@@ -132,18 +132,18 @@ private:
 struct IconKitCache {
     QHash<QString, QIcon> icons;      ///< key: "svg_path|HexArgb"
     QHash<QString, QPixmap> pixmaps;  ///< key: "svg_path|HexArgb|WxH"
-    /// 上次缓存写入时的主题（dark/light）。任一 tinted_* 入口检测变化时清空缓存。
+    /// 上次缓存写入时的Theme（dark/light）。任一 tinted_* 入口检测变化时清空缓存。
     /// 初始化为与 Theme::is_dark() 相反的值，确保首次调用走清空分支完成初始化。
     bool last_dark = !Theme::is_dark();
 };
 
-/// 单例缓存（函数局部 static，线程安全初始化，UI 单线程使用）。
+/// 单例缓存（函数局部 static，线程Security初始化，UI 单线程使用）。
 IconKitCache& icon_cache_state() {
     static IconKitCache state;
     return state;
 }
 
-/// 主题变化时清空两个缓存。每次 tinted_* 入口调用，开销仅一次 bool 比较。
+/// Theme变化时清空两个缓存。每次 tinted_* 入口调用，开销仅一次 bool 比较。
 void maybe_invalidate_cache() {
     const bool dark = Theme::is_dark();
     if (dark != icon_cache_state().last_dark) {
@@ -170,11 +170,11 @@ QString pixmap_cache_key(const QString& svg_path, const QColor& color, const QSi
 
 QPixmap tinted_pixmap(const QString& svg_path, const QColor& color, const QSize& size) {
     maybe_invalidate_cache();
-    // QLabel::setPixmap 场景：size 是逻辑尺寸，按 qApp dpr 渲染高清并设置 dpr，
+    // QLabel::setPixmap 场景：size 是逻辑尺寸，按 qApp dpr 渲染高清并Settings dpr，
     // 让 QLabel 在高 DPI 屏幕上清晰显示。
     const qreal dpr = qMax(qreal(1.0), qApp ? qApp->devicePixelRatio() : qreal(1.0));
     const QSize phys(qRound(size.width() * dpr), qRound(size.height() * dpr));
-    // 缓存命中直接返回，避免重复 new QSvgRenderer + parse SVG
+    // 缓存命Medium直接返回，避免重复 new QSvgRenderer + parse SVG
     const QString key = pixmap_cache_key(svg_path, color, phys);
     const auto it = icon_cache_state().pixmaps.constFind(key);
     if (it != icon_cache_state().pixmaps.constEnd()) {
@@ -195,7 +195,7 @@ QPixmap tinted_pixmap(const QString& svg_path, IconRole role, const QSize& size)
 
 QIcon tinted_icon(const QString& svg_path, const QColor& color) {
     maybe_invalidate_cache();
-    // 缓存命中直接返回，避免每次都 new TintedIconEngine
+    // 缓存命Medium直接返回，避免每次都 new TintedIconEngine
     const QString key = icon_cache_key(svg_path, color);
     const auto it = icon_cache_state().icons.constFind(key);
     if (it != icon_cache_state().icons.constEnd()) {
@@ -212,9 +212,9 @@ QIcon tinted_icon(const QString& svg_path, IconRole role) {
 
 void copy_secure_to_clipboard(const QString& text) {
     QApplication::clipboard()->setText(text);
-    // 30 秒后自动清空剪贴板，避免密码明文长期留存被其他程序读取。
-    // 使用静态 QTimer 保证全生命周止单例，多次复制会重置计时器，
-    // 不会提前清空后续复制的内容。
+    // 30 秒后自动清空剪贴板，避免Password明文长期留存被其他程序读取。
+    // 使用静态 QTimer 保证全生命周止单例，多次Copy会重置计时器，
+    // 不会提前清空后续Copy的内容。
     static QTimer clear_timer;
     clear_timer.setSingleShot(true);
     clear_timer.disconnect();
@@ -224,4 +224,4 @@ void copy_secure_to_clipboard(const QString& text) {
     clear_timer.start(30000);
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

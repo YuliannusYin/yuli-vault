@@ -2,8 +2,8 @@
 // =============================================================================
 // GeneratorHistoryDialog.cpp
 //
-// PwdVault 生成器历史记录对话框实现。
-// 模态遮罩 + 720px 居中卡片 + 工具栏 + 表格 + 尾部按钮。
+// Yuli Vault Generator history对话框实现。
+// 模态遮罩 + 720px 居Medium卡片 + 工具栏 + 表格 + 尾部按钮。
 // =============================================================================
 #include "GeneratorHistoryDialog.h"
 #include "IpcClient.h"
@@ -29,11 +29,11 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
-/// 默认的密码遮罩字符，按密码长度重复填充。
+/// 默认的Password遮罩字符，按Length重复填充。
 /// 用全角字符 U+2022 与 QSS 配合以与项目其他位置一致。
 QString masked_password(int length) {
     if (length <= 0) return QStringLiteral("•");
@@ -55,7 +55,7 @@ GeneratorHistoryDialog::GeneratorHistoryDialog(IpcClient* client, QWidget* paren
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     setAttribute(Qt::WA_TranslucentBackground);
-    setWindowTitle(tr("生成器历史记录"));
+    setWindowTitle(tr("Generator history"));
 
     // 自动覆盖父窗口大小
     if (parent) {
@@ -117,7 +117,7 @@ void GeneratorHistoryDialog::build_ui() {
     clock_icon->setProperty("cssClass", QStringLiteral("inlineIcon"));
     header_layout->addWidget(clock_icon);
 
-    auto* title = new QLabel(tr("生成器历史记录"), header);
+    auto* title = new QLabel(tr("Generator history"), header);
     title->setProperty("cssClass", QStringLiteral("sectionTitle"));
     header_layout->addWidget(title);
     header_layout->addStretch(1);
@@ -138,12 +138,12 @@ void GeneratorHistoryDialog::build_ui() {
     body_layout->setContentsMargins(24, 20, 24, 20);
     body_layout->setSpacing(12);
 
-    // 工具栏：[显示密码] + stretch + [状态标签] + [刷新]
+    // 工具栏：[Show password] + stretch + [状态Tags] + [Refresh]
     auto* toolbar = new QHBoxLayout();
     toolbar->setContentsMargins(0, 0, 0, 0);
     toolbar->setSpacing(12);
 
-    show_password_check_ = new QCheckBox(tr("显示密码"), body);
+    show_password_check_ = new QCheckBox(tr("Show password"), body);
     show_password_check_->setCursor(Qt::PointingHandCursor);
     toolbar->addWidget(show_password_check_);
     toolbar->addStretch(1);
@@ -155,7 +155,7 @@ void GeneratorHistoryDialog::build_ui() {
     refresh_btn_ = new QPushButton(body);
     refresh_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/refresh-cw.svg"), IconRole::Normal));
     refresh_btn_->setIconSize(QSize(16, 16));
-    refresh_btn_->setText(tr("刷新"));
+    refresh_btn_->setText(tr("Refresh"));
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setFixedHeight(36);
     refresh_btn_->setProperty("cssClass", QStringLiteral("outline"));
@@ -170,10 +170,10 @@ void GeneratorHistoryDialog::build_ui() {
     table_->setProperty("cssClass", QStringLiteral("cardScroll"));
     table_->setHorizontalHeaderLabels(
         QStringList() << QStringLiteral("#")
-                       << tr("时间")
-                       << tr("长度")
-                       << tr("密码")
-                       << tr("操作"));
+                       << tr("Time")
+                       << tr("Length")
+                       << tr("Password")
+                       << tr("Actions"));
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -181,7 +181,7 @@ void GeneratorHistoryDialog::build_ui() {
     table_->setFocusPolicy(Qt::StrongFocus);
     table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    // 列宽：固定列 + 密码列按内容自适应（最小 200 防止长密码被压缩）
+    // 列宽：固定列 + Password列按内容自适应（最小 200 防止长Password被压缩）
     table_->horizontalHeader()->setMinimumSectionSize(200);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -193,7 +193,7 @@ void GeneratorHistoryDialog::build_ui() {
     table_->verticalHeader()->setDefaultSectionSize(40);
     body_layout->addWidget(table_, 1);
 
-    // ── 空状态（提示文案 + 「去生成密码」按钮） ──
+    // ── 空状态（提示文案 + 「Generate a password」按钮） ──
     // 与 table_ 共享 body_layout 的可伸展空间（两者都带 stretch=1），
     // 通过 setVisible 切换：表格有数据时显示表格，否则显示空状态。
     auto* empty_state_layout = new QVBoxLayout();
@@ -201,12 +201,12 @@ void GeneratorHistoryDialog::build_ui() {
     empty_label_ = new QLabel(body);
     empty_label_->setAlignment(Qt::AlignCenter);
     empty_label_->setProperty("cssClass", QStringLiteral("emptyHint"));
-    empty_label_->setText(tr("暂无生成历史"));
+    empty_label_->setText(tr("No generated passwords yet"));
     empty_label_->hide();
     empty_state_layout->addWidget(empty_label_);
 
     empty_action_button_ = new QPushButton(body);
-    empty_action_button_->setText(tr("去生成密码"));
+    empty_action_button_->setText(tr("Generate a password"));
     empty_action_button_->setCursor(Qt::PointingHandCursor);
     empty_action_button_->setFixedHeight(40);
     empty_action_button_->setMaximumWidth(180);
@@ -229,7 +229,7 @@ void GeneratorHistoryDialog::build_ui() {
     clear_all_btn_ = new QPushButton(footer);
     clear_all_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/eraser.svg"), IconRole::Danger));
     clear_all_btn_->setIconSize(QSize(16, 16));
-    clear_all_btn_->setText(tr("清空全部"));
+    clear_all_btn_->setText(tr("Clear all"));
     clear_all_btn_->setCursor(Qt::PointingHandCursor);
     clear_all_btn_->setFixedHeight(40);
     clear_all_btn_->setProperty("cssClass", QStringLiteral("danger"));
@@ -238,7 +238,7 @@ void GeneratorHistoryDialog::build_ui() {
     footer_layout->addStretch(1);
 
     close_btn_ = new QPushButton(footer);
-    close_btn_->setText(tr("关闭"));
+    close_btn_->setText(tr("Close"));
     close_btn_->setCursor(Qt::PointingHandCursor);
     close_btn_->setFixedHeight(40);
     close_btn_->setProperty("cssClass", QStringLiteral("primary"));
@@ -257,9 +257,9 @@ void GeneratorHistoryDialog::build_ui() {
             this, &GeneratorHistoryDialog::on_clear_all_clicked);
     connect(close_btn_, &QPushButton::clicked,
             this, &GeneratorHistoryDialog::on_close_clicked);
-    // 头部 X 关闭按钮也调用 close_dialog（与 close_btn 同语义）
+    // 头部 X Close按钮也调用 close_dialog（与 close_btn 同语义）
     connect(close_btn, &QPushButton::clicked, this, &QDialog::close);
-    // 空状态按钮：emit 信号 + accept 关闭对话框，由父窗口切换到 GeneratorView
+    // 空状态按钮：emit 信号 + accept Close对话框，由父窗口切换到 GeneratorView
     connect(empty_action_button_, &QPushButton::clicked, this, [this]() {
         emit generate_requested();
         accept();
@@ -282,7 +282,7 @@ void GeneratorHistoryDialog::populate_table() {
     table_->setRowCount(0);
 
     if (!client_) {
-        set_status(tr("未连接到 service"), /*is_error=*/true);
+        set_status(tr("Not connected to the service"), /*is_error=*/true);
         return;
     }
 
@@ -297,44 +297,44 @@ void GeneratorHistoryDialog::populate_table() {
     table_->setRowCount(static_cast<int>(records_.size()));
     for (int row = 0; row < static_cast<int>(records_.size()); ++row) {
         const auto& rec = records_[row];
-        // # 行号（从 1 起，按时间倒序）
+        // # 行号（从 1 起，按Time倒序）
         auto* idx_item = new QTableWidgetItem(QString::number(row + 1));
         idx_item->setTextAlignment(Qt::AlignCenter);
         table_->setItem(row, 0, idx_item);
 
-        // 时间
+        // Time
         auto* time_item = new QTableWidgetItem(format_time(rec.created_at));
         time_item->setTextAlignment(Qt::AlignCenter);
         table_->setItem(row, 1, time_item);
 
-        // 长度
+        // Length
         auto* len_item = new QTableWidgetItem(QString::number(rec.length));
         len_item->setTextAlignment(Qt::AlignCenter);
         table_->setItem(row, 2, len_item);
 
-        // 密码（默认遮罩）
+        // Password（默认遮罩）
         auto* pwd_item = new QTableWidgetItem(masked_password(rec.length));
-        // 用户不应能复制遮罩文本：禁用 selectable 即可
+        // 用户不应能Copy遮罩文本：Disable selectable 即可
         pwd_item->setFlags(pwd_item->flags() & ~Qt::ItemIsEditable);
-        // mono 字体确保密码字符等宽对齐，长密码可读性更好
+        // mono 字体确保Password字符等宽对齐，长Password可读性更好
         QFont mono_font(QStringLiteral("Consolas"));
         mono_font.setStyleHint(QFont::Monospace);
         pwd_item->setFont(mono_font);
         table_->setItem(row, 3, pwd_item);
 
-        // 操作（复制 / 删除）
+        // Actions（Copy / Delete）
         install_action_widget(row, rec.id);
     }
 
     refresh_password_cells();
 
     if (records_.empty()) {
-        set_status(tr("暂无记录"), /*is_error=*/false);
+        set_status(tr("No records"), /*is_error=*/false);
         if (table_) table_->hide();
         if (empty_label_) empty_label_->show();
         if (empty_action_button_) empty_action_button_->show();
     } else {
-        set_status(tr("共 %1 条记录").arg(records_.size()),
+        set_status(tr("%1 records").arg(records_.size()),
                    /*is_error=*/false);
         if (table_) table_->show();
         if (empty_label_) empty_label_->hide();
@@ -351,7 +351,7 @@ void GeneratorHistoryDialog::refresh_password_cells() {
         auto* item = table_->item(row, 3);
         if (item) {
             item->setText(text);
-            // 仅在显示密码时设 tooltip 展示完整密码，遮罩状态下不设
+            // 仅在Show password时设 tooltip 展示完整Password，遮罩状态下不设
             item->setToolTip(show ? text : QString());
         }
     }
@@ -366,7 +366,7 @@ void GeneratorHistoryDialog::install_action_widget(int row, int64_t record_id) {
     auto* copy_btn = new QPushButton(widget);
     copy_btn->setIcon(tinted_icon(QStringLiteral(":/icons/copy.svg"), IconRole::Normal));
     copy_btn->setIconSize(QSize(14, 14));
-    copy_btn->setToolTip(tr("复制密码"));
+    copy_btn->setToolTip(tr("Copy password"));
     copy_btn->setCursor(Qt::PointingHandCursor);
     copy_btn->setFixedSize(32, 32);
     copy_btn->setProperty("cssClass", QStringLiteral("icon"));
@@ -375,7 +375,7 @@ void GeneratorHistoryDialog::install_action_widget(int row, int64_t record_id) {
     auto* del_btn = new QPushButton(widget);
     del_btn->setIcon(tinted_icon(QStringLiteral(":/icons/trash-2.svg"), IconRole::Danger));
     del_btn->setIconSize(QSize(14, 14));
-    del_btn->setToolTip(tr("删除此条"));
+    del_btn->setToolTip(tr("Delete this record"));
     del_btn->setCursor(Qt::PointingHandCursor);
     del_btn->setFixedSize(32, 32);
     del_btn->setProperty("cssClass", QStringLiteral("icon"));
@@ -383,12 +383,12 @@ void GeneratorHistoryDialog::install_action_widget(int row, int64_t record_id) {
 
     // 捕获 record_id 用于回调
     connect(copy_btn, &QPushButton::clicked, this, [this, record_id]() {
-        // 从 records_ 中找到对应密码
+        // 从 records_ Medium找到对应Password
         for (const auto& rec : records_) {
             if (rec.id == record_id) {
                 copy_secure_to_clipboard(QString::fromStdString(rec.password));
-                Toast::show(this, tr("已复制，30 秒后自动清空"));
-                set_status(tr("已复制到剪贴板（30 秒后自动清空）"),
+                Toast::show(this, tr("Copied. Clipboard clears in 30 seconds."));
+                set_status(tr("Copied. Clipboard clears in 30 seconds."),
                            /*is_error=*/false);
                 return;
             }
@@ -405,7 +405,7 @@ void GeneratorHistoryDialog::delete_record(int64_t record_id) {
     if (!client_) return;
     auto result = client_->remove_generated_record(record_id);
     if (!result.ok()) {
-        QMessageBox::warning(this, tr("删除失败"),
+        QMessageBox::warning(this, tr("Delete failed"),
             QString::fromStdString(result.error().what()));
         return;
     }
@@ -415,7 +415,7 @@ void GeneratorHistoryDialog::delete_record(int64_t record_id) {
 void GeneratorHistoryDialog::set_status(const QString& message, bool is_error) {
     if (!status_label_) return;
     status_label_->setText(message);
-    // 切换 cssClass 以反映成功 / 错误状态
+    // 切换 cssClass 以反映Success / 错误状态
     status_label_->setProperty("cssClass",
         is_error ? QStringLiteral("error") : QStringLiteral("caption"));
     // unpolish/polish 让 QSS 重新应用
@@ -439,8 +439,8 @@ void GeneratorHistoryDialog::on_refresh_clicked() {
 void GeneratorHistoryDialog::on_clear_all_clicked() {
     if (records_.empty()) return;
     const auto ret = QMessageBox::question(
-        this, tr("清空全部记录"),
-        tr("确认删除全部 %1 条生成记录？此操作不可撤销。")
+        this, tr("Clear all records"),
+        tr("Delete all %1 generated records? This cannot be undone.")
             .arg(records_.size()),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (ret != QMessageBox::Yes) return;
@@ -448,7 +448,7 @@ void GeneratorHistoryDialog::on_clear_all_clicked() {
     if (!client_) return;
     auto result = client_->clear_generated_records();
     if (!result.ok()) {
-        QMessageBox::warning(this, tr("清空失败"),
+        QMessageBox::warning(this, tr("Clear failed"),
             QString::fromStdString(result.error().what()));
         return;
     }
@@ -459,4 +459,4 @@ void GeneratorHistoryDialog::on_close_clicked() {
     close();
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

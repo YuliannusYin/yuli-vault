@@ -27,16 +27,17 @@
 
 namespace {
 
-pwdvault::core::ByteVec make_bytes(const std::string& s) {
-    return pwdvault::core::ByteVec(
+yuli::vault::core::ByteVec make_bytes(const std::string& s) {
+    return yuli::vault::core::ByteVec(
         reinterpret_cast<const std::byte*>(s.data()),
         reinterpret_cast<const std::byte*>(s.data()) + s.size());
 }
 
-pwdvault::core::PasswordEntry make_sample_entry() {
-    pwdvault::core::PasswordEntry e;
+yuli::vault::core::PasswordEntry make_sample_entry() {
+    yuli::vault::core::PasswordEntry e;
     e.id = 42;
-    e.entry_name = "GitHub";
+    e.type = yuli::vault::core::VaultItemType::Login;
+    e.title = "GitHub";
     e.account = "alice";
     e.website = "github.com";
     e.username = "alice";
@@ -56,16 +57,16 @@ pwdvault::core::PasswordEntry make_sample_entry() {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolMessageHeader, SizeIs16Bytes) {
-    static_assert(sizeof(pwdvault::protocol::MessageHeader) == 16,
+    static_assert(sizeof(yuli::vault::protocol::MessageHeader) == 16,
                   "MessageHeader must be 16 bytes");
-    EXPECT_EQ(sizeof(pwdvault::protocol::MessageHeader), 16u);
+    EXPECT_EQ(sizeof(yuli::vault::protocol::MessageHeader), 16u);
 }
 
 TEST(ProtocolMessageHeader, DefaultFieldsMatchConstants) {
-    pwdvault::protocol::MessageHeader h;
-    EXPECT_EQ(h.magic, pwdvault::protocol::kMagic);
-    EXPECT_EQ(h.version, pwdvault::protocol::kProtocolVersion);
-    EXPECT_EQ(h.command, pwdvault::protocol::CommandId::Ping);
+    yuli::vault::protocol::MessageHeader h;
+    EXPECT_EQ(h.magic, yuli::vault::protocol::kMagic);
+    EXPECT_EQ(h.version, yuli::vault::protocol::kProtocolVersion);
+    EXPECT_EQ(h.command, yuli::vault::protocol::CommandId::Ping);
     EXPECT_EQ(h.request_id, 0u);
     EXPECT_EQ(h.payload_size, 0u);
 }
@@ -75,7 +76,7 @@ TEST(ProtocolMessageHeader, DefaultFieldsMatchConstants) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolCommandName, KnownCommands) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EXPECT_EQ(command_name(CommandId::Ping), "Ping");
     EXPECT_EQ(command_name(CommandId::Shutdown), "Shutdown");
     EXPECT_EQ(command_name(CommandId::Unlock), "Unlock");
@@ -95,7 +96,7 @@ TEST(ProtocolCommandName, KnownCommands) {
 }
 
 TEST(ProtocolCommandName, UnknownCommandReturnsUnknown) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EXPECT_EQ(command_name(static_cast<CommandId>(0xFFFF)), "Unknown");
 }
 
@@ -104,7 +105,7 @@ TEST(ProtocolCommandName, UnknownCommandReturnsUnknown) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolPrimitiveRoundtrip, Uint16) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const uint16_t v = 0x1234;
     auto bytes = serialize(v);
     auto r = deserialize<uint16_t>(bytes);
@@ -113,7 +114,7 @@ TEST(ProtocolPrimitiveRoundtrip, Uint16) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, Uint32) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const uint32_t v = 0xDEADBEEFu;
     auto bytes = serialize(v);
     auto r = deserialize<uint32_t>(bytes);
@@ -122,7 +123,7 @@ TEST(ProtocolPrimitiveRoundtrip, Uint32) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, Uint64) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const uint64_t v = 0x0123456789ABCDEFULL;
     auto bytes = serialize(v);
     auto r = deserialize<uint64_t>(bytes);
@@ -131,7 +132,7 @@ TEST(ProtocolPrimitiveRoundtrip, Uint64) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, Int64) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const int64_t v = -1234567890123LL;
     auto bytes = serialize(v);
     auto r = deserialize<int64_t>(bytes);
@@ -140,7 +141,7 @@ TEST(ProtocolPrimitiveRoundtrip, Int64) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, BoolTrue) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     auto bytes = serialize(true);
     auto r = deserialize<bool>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
@@ -148,7 +149,7 @@ TEST(ProtocolPrimitiveRoundtrip, BoolTrue) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, BoolFalse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     auto bytes = serialize(false);
     auto r = deserialize<bool>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
@@ -156,7 +157,7 @@ TEST(ProtocolPrimitiveRoundtrip, BoolFalse) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, String) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const std::string v = "hello, 世界! pwdvault";
     auto bytes = serialize(v);
     auto r = deserialize<std::string>(bytes);
@@ -165,7 +166,7 @@ TEST(ProtocolPrimitiveRoundtrip, String) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, EmptyString) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const std::string v;
     auto bytes = serialize(v);
     auto r = deserialize<std::string>(bytes);
@@ -174,28 +175,28 @@ TEST(ProtocolPrimitiveRoundtrip, EmptyString) {
 }
 
 TEST(ProtocolPrimitiveRoundtrip, ByteVec) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const auto v = make_bytes("\x00\x01\x02\xff\xfe\x00");
     auto bytes = serialize(v);
-    auto r = deserialize<pwdvault::core::ByteVec>(bytes);
+    auto r = deserialize<yuli::vault::core::ByteVec>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value(), v);
 }
 
 TEST(ProtocolPrimitiveRoundtrip, EmptyByteVec) {
-    using namespace pwdvault::protocol;
-    const pwdvault::core::ByteVec v;
+    using namespace yuli::vault::protocol;
+    const yuli::vault::core::ByteVec v;
     auto bytes = serialize(v);
-    auto r = deserialize<pwdvault::core::ByteVec>(bytes);
+    auto r = deserialize<yuli::vault::core::ByteVec>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_TRUE(r.value().empty());
 }
 
 TEST(ProtocolPrimitiveRoundtrip, ErrorCode) {
-    using namespace pwdvault::protocol;
-    const auto v = pwdvault::core::ErrorCode::Unauthorized;
+    using namespace yuli::vault::protocol;
+    const auto v = yuli::vault::core::ErrorCode::Unauthorized;
     auto bytes = serialize(v);
-    auto r = deserialize<pwdvault::core::ErrorCode>(bytes);
+    auto r = deserialize<yuli::vault::core::ErrorCode>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value(), v);
 }
@@ -205,12 +206,14 @@ TEST(ProtocolPrimitiveRoundtrip, ErrorCode) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolCoreRoundtrip, PasswordEntry) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const auto orig = make_sample_entry();
     auto bytes = serialize(orig);
-    auto r = deserialize<pwdvault::core::PasswordEntry>(bytes);
+    auto r = deserialize<yuli::vault::core::PasswordEntry>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     const auto& got = r.value();
+    EXPECT_EQ(got.type, orig.type);
+    EXPECT_EQ(got.title, orig.title);
     EXPECT_EQ(got.id, orig.id);
     EXPECT_EQ(got.website, orig.website);
     EXPECT_EQ(got.username, orig.username);
@@ -222,14 +225,27 @@ TEST(ProtocolCoreRoundtrip, PasswordEntry) {
     EXPECT_EQ(got.tag, orig.tag);
 }
 
+TEST(ProtocolCoreRoundtrip, VaultItemTypeIsPreserved) {
+    using namespace yuli::vault::protocol;
+    auto orig = make_sample_entry();
+    orig.type = yuli::vault::core::VaultItemType::SecureNote;
+    orig.title = "Private note";
+    orig.password.clear();
+    auto bytes = serialize(orig);
+    auto r = deserialize<yuli::vault::core::PasswordEntry>(bytes);
+    ASSERT_TRUE(r.ok()) << r.error().what();
+    EXPECT_EQ(r.value().type, yuli::vault::core::VaultItemType::SecureNote);
+    EXPECT_EQ(r.value().title, "Private note");
+}
+
 TEST(ProtocolCoreRoundtrip, SearchQueryWithFields) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::SearchQuery orig;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::SearchQuery orig;
     orig.text = "github";
     orig.fields = { "website", "username", "note" };
     orig.case_sensitive = true;
     auto bytes = serialize(orig);
-    auto r = deserialize<pwdvault::core::SearchQuery>(bytes);
+    auto r = deserialize<yuli::vault::core::SearchQuery>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     const auto& got = r.value();
     EXPECT_EQ(got.text, orig.text);
@@ -238,13 +254,13 @@ TEST(ProtocolCoreRoundtrip, SearchQueryWithFields) {
 }
 
 TEST(ProtocolCoreRoundtrip, SearchQueryEmptyFields) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::SearchQuery orig;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::SearchQuery orig;
     orig.text = "";
     orig.fields = {};
     orig.case_sensitive = false;
     auto bytes = serialize(orig);
-    auto r = deserialize<pwdvault::core::SearchQuery>(bytes);
+    auto r = deserialize<yuli::vault::core::SearchQuery>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value().text, orig.text);
     EXPECT_TRUE(r.value().fields.empty());
@@ -252,8 +268,8 @@ TEST(ProtocolCoreRoundtrip, SearchQueryEmptyFields) {
 }
 
 TEST(ProtocolCoreRoundtrip, PasswordGeneratorOptions) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::PasswordGeneratorOptions orig;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::PasswordGeneratorOptions orig;
     orig.length = 32;
     orig.use_uppercase = false;
     orig.use_lowercase = true;
@@ -262,7 +278,7 @@ TEST(ProtocolCoreRoundtrip, PasswordGeneratorOptions) {
     orig.custom_chars = "!@#$";
     orig.exclude_ambiguous = true;
     auto bytes = serialize(orig);
-    auto r = deserialize<pwdvault::core::PasswordGeneratorOptions>(bytes);
+    auto r = deserialize<yuli::vault::core::PasswordGeneratorOptions>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     const auto& got = r.value();
     EXPECT_EQ(got.length, orig.length);
@@ -279,7 +295,7 @@ TEST(ProtocolCoreRoundtrip, PasswordGeneratorOptions) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolRequestRoundtrip, PingRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     PingRequest orig;
     auto bytes = serialize(orig);
     EXPECT_TRUE(bytes.empty());  // 空请求应产生空负载
@@ -288,7 +304,7 @@ TEST(ProtocolRequestRoundtrip, PingRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, UnlockRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     UnlockRequest orig{ "program-password-123" };
     auto bytes = serialize(orig);
     auto r = deserialize<UnlockRequest>(bytes);
@@ -297,7 +313,7 @@ TEST(ProtocolRequestRoundtrip, UnlockRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, EnableProgramPasswordRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EnableProgramPasswordRequest orig{ "new-program-pwd" };
     auto bytes = serialize(orig);
     auto r = deserialize<EnableProgramPasswordRequest>(bytes);
@@ -306,7 +322,7 @@ TEST(ProtocolRequestRoundtrip, EnableProgramPasswordRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, DisableProgramPasswordRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     DisableProgramPasswordRequest orig{ "current-pwd" };
     auto bytes = serialize(orig);
     auto r = deserialize<DisableProgramPasswordRequest>(bytes);
@@ -315,7 +331,7 @@ TEST(ProtocolRequestRoundtrip, DisableProgramPasswordRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, ChangeProgramPasswordRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     ChangeProgramPasswordRequest orig{ "old-pwd", "new-pwd" };
     auto bytes = serialize(orig);
     auto r = deserialize<ChangeProgramPasswordRequest>(bytes);
@@ -325,7 +341,7 @@ TEST(ProtocolRequestRoundtrip, ChangeProgramPasswordRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, GetVaultStatusRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     GetVaultStatusRequest orig;
     auto bytes = serialize(orig);
     EXPECT_TRUE(bytes.empty());  // 空请求应产生空负载
@@ -334,7 +350,7 @@ TEST(ProtocolRequestRoundtrip, GetVaultStatusRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, AddEntryRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     AddEntryRequest orig{ make_sample_entry() };
     auto bytes = serialize(orig);
     auto r = deserialize<AddEntryRequest>(bytes);
@@ -352,7 +368,7 @@ TEST(ProtocolRequestRoundtrip, AddEntryRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, SearchEntriesRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SearchEntriesRequest orig;
     orig.query.text = "github";
     orig.query.fields = { "website", "username" };
@@ -366,7 +382,7 @@ TEST(ProtocolRequestRoundtrip, SearchEntriesRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, GeneratePasswordRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     GeneratePasswordRequest orig;
     orig.options.length = 24;
     orig.options.use_uppercase = true;
@@ -388,7 +404,7 @@ TEST(ProtocolRequestRoundtrip, GeneratePasswordRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, RemoveEntryRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     RemoveEntryRequest orig{ 99 };
     auto bytes = serialize(orig);
     auto r = deserialize<RemoveEntryRequest>(bytes);
@@ -397,7 +413,7 @@ TEST(ProtocolRequestRoundtrip, RemoveEntryRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, GetEntryRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     GetEntryRequest orig{ 7 };
     auto bytes = serialize(orig);
     auto r = deserialize<GetEntryRequest>(bytes);
@@ -406,7 +422,7 @@ TEST(ProtocolRequestRoundtrip, GetEntryRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, EstimateStrengthRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EstimateStrengthRequest orig{ "p@ssw0rd-very-strong" };
     auto bytes = serialize(orig);
     auto r = deserialize<EstimateStrengthRequest>(bytes);
@@ -415,7 +431,7 @@ TEST(ProtocolRequestRoundtrip, EstimateStrengthRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, EmptyRequests) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EXPECT_TRUE(deserialize<ShutdownRequest>(serialize(ShutdownRequest{})).ok());
     EXPECT_TRUE(deserialize<LockRequest>(serialize(LockRequest{})).ok());
     EXPECT_TRUE(deserialize<ListEntriesRequest>(serialize(ListEntriesRequest{})).ok());
@@ -427,7 +443,7 @@ TEST(ProtocolRequestRoundtrip, EmptyRequests) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolResponseRoundtrip, PingResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     PingResponse orig{ 1700000000ULL };
     auto bytes = serialize(orig);
     auto r = deserialize<PingResponse>(bytes);
@@ -436,7 +452,7 @@ TEST(ProtocolResponseRoundtrip, PingResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, UnlockResponseSuccess) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     UnlockResponse orig{ true, "" };
     auto bytes = serialize(orig);
     auto r = deserialize<UnlockResponse>(bytes);
@@ -446,7 +462,7 @@ TEST(ProtocolResponseRoundtrip, UnlockResponseSuccess) {
 }
 
 TEST(ProtocolResponseRoundtrip, UnlockResponseFailure) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     UnlockResponse orig{ false, "wrong password" };
     auto bytes = serialize(orig);
     auto r = deserialize<UnlockResponse>(bytes);
@@ -456,7 +472,7 @@ TEST(ProtocolResponseRoundtrip, UnlockResponseFailure) {
 }
 
 TEST(ProtocolResponseRoundtrip, EnableProgramPasswordResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EnableProgramPasswordResponse orig{ true, "" };
     auto bytes = serialize(orig);
     auto r = deserialize<EnableProgramPasswordResponse>(bytes);
@@ -466,7 +482,7 @@ TEST(ProtocolResponseRoundtrip, EnableProgramPasswordResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, EnableProgramPasswordResponseFailure) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EnableProgramPasswordResponse orig{ false, "already enabled" };
     auto bytes = serialize(orig);
     auto r = deserialize<EnableProgramPasswordResponse>(bytes);
@@ -476,7 +492,7 @@ TEST(ProtocolResponseRoundtrip, EnableProgramPasswordResponseFailure) {
 }
 
 TEST(ProtocolResponseRoundtrip, DisableProgramPasswordResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     DisableProgramPasswordResponse orig{ true, "" };
     auto bytes = serialize(orig);
     auto r = deserialize<DisableProgramPasswordResponse>(bytes);
@@ -485,7 +501,7 @@ TEST(ProtocolResponseRoundtrip, DisableProgramPasswordResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, ChangeProgramPasswordResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     ChangeProgramPasswordResponse orig{ false, "old password incorrect" };
     auto bytes = serialize(orig);
     auto r = deserialize<ChangeProgramPasswordResponse>(bytes);
@@ -495,7 +511,7 @@ TEST(ProtocolResponseRoundtrip, ChangeProgramPasswordResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, GetVaultStatusResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     {
         GetVaultStatusResponse orig{ false, false };  // 明文模式，未锁定
         auto bytes = serialize(orig);
@@ -523,7 +539,7 @@ TEST(ProtocolResponseRoundtrip, GetVaultStatusResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, AddEntryResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     AddEntryResponse orig{ make_sample_entry() };
     auto bytes = serialize(orig);
     auto r = deserialize<AddEntryResponse>(bytes);
@@ -535,10 +551,10 @@ TEST(ProtocolResponseRoundtrip, AddEntryResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, SearchEntriesResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SearchEntriesResponse orig;
     orig.entries.push_back(make_sample_entry());
-    pwdvault::core::PasswordEntry e2 = make_sample_entry();
+    yuli::vault::core::PasswordEntry e2 = make_sample_entry();
     e2.id = 100;
     e2.website = "gitlab.com";
     orig.entries.push_back(e2);
@@ -553,7 +569,7 @@ TEST(ProtocolResponseRoundtrip, SearchEntriesResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, SearchEntriesResponseEmpty) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SearchEntriesResponse orig;
     auto bytes = serialize(orig);
     auto r = deserialize<SearchEntriesResponse>(bytes);
@@ -562,7 +578,7 @@ TEST(ProtocolResponseRoundtrip, SearchEntriesResponseEmpty) {
 }
 
 TEST(ProtocolResponseRoundtrip, GeneratePasswordResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     GeneratePasswordResponse orig{ "Xy9!aBcDeFgH1234" };
     auto bytes = serialize(orig);
     auto r = deserialize<GeneratePasswordResponse>(bytes);
@@ -571,12 +587,12 @@ TEST(ProtocolResponseRoundtrip, GeneratePasswordResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, EstimateStrengthResponse) {
-    using namespace pwdvault;
+    using namespace yuli::vault;
     protocol::EstimateStrengthResponse orig;
     orig.estimate.bits = 96;
     orig.estimate.level = core::StrengthLevel::Strong;
     orig.estimate.score = 3;
-    orig.estimate.warnings = {"检测到 3 位顺序字符序列", "检测到键盘序列（长度 4）"};
+    orig.estimate.warnings = {"sequential:3", "keyboard:4"};
     auto bytes = protocol::serialize(orig);
     auto r = protocol::deserialize<protocol::EstimateStrengthResponse>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
@@ -587,7 +603,7 @@ TEST(ProtocolResponseRoundtrip, EstimateStrengthResponse) {
 }
 
 TEST(ProtocolTypeRoundtrip, StrengthEstimate) {
-    using namespace pwdvault;
+    using namespace yuli::vault;
     core::StrengthEstimate orig;
     orig.bits = 0;
     orig.level = core::StrengthLevel::VeryWeak;
@@ -603,7 +619,7 @@ TEST(ProtocolTypeRoundtrip, StrengthEstimate) {
 }
 
 TEST(ProtocolTypeRoundtrip, StrengthEstimateAllLevels) {
-    using namespace pwdvault;
+    using namespace yuli::vault;
     for (int lvl = 0; lvl <= 4; ++lvl) {
         core::StrengthEstimate orig;
         orig.bits = 50 + lvl * 10;
@@ -621,15 +637,15 @@ TEST(ProtocolTypeRoundtrip, StrengthEstimateAllLevels) {
 }
 
 TEST(ProtocolResponseRoundtrip, EmptyResponses) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     EXPECT_TRUE(deserialize<ShutdownResponse>(serialize(ShutdownResponse{})).ok());
     EXPECT_TRUE(deserialize<LockResponse>(serialize(LockResponse{})).ok());
     EXPECT_TRUE(deserialize<RemoveEntryResponse>(serialize(RemoveEntryResponse{})).ok());
 }
 
 TEST(ProtocolResponseRoundtrip, ErrorResponse) {
-    using namespace pwdvault::protocol;
-    ErrorResponse orig{ pwdvault::core::ErrorCode::Unauthorized, "invalid program password" };
+    using namespace yuli::vault::protocol;
+    ErrorResponse orig{ yuli::vault::core::ErrorCode::Unauthorized, "invalid program password" };
     auto bytes = serialize(orig);
     auto r = deserialize<ErrorResponse>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
@@ -642,7 +658,7 @@ TEST(ProtocolResponseRoundtrip, ErrorResponse) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolFrame, PackAndParseHeader) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     const UnlockRequest req{ "program-pwd" };
     auto payload = serialize(req);
     const uint32_t request_id = 0xCAFEBABEu;
@@ -662,14 +678,14 @@ TEST(ProtocolFrame, PackAndParseHeader) {
     EXPECT_EQ(hdr.payload_size, payload.size());
 
     // 从 offset 开始取出 payload，应能反序列化回原请求
-    pwdvault::core::ByteSpan payload_span(frame.data() + offset, hdr.payload_size);
+    yuli::vault::core::ByteSpan payload_span(frame.data() + offset, hdr.payload_size);
     auto r = deserialize<UnlockRequest>(payload_span);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value().password, req.password);
 }
 
 TEST(ProtocolFrame, PackMessageWithEmptyPayload) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     auto frame = pack_message(CommandId::Ping, 1u, {});
     ASSERT_EQ(frame.size(), sizeof(MessageHeader));
     auto ph = parse_header(frame);
@@ -680,24 +696,24 @@ TEST(ProtocolFrame, PackMessageWithEmptyPayload) {
 }
 
 TEST(ProtocolFrame, ParseHeaderWithInsufficientData) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 仅 8 字节（不足 16 字节 header）
-    pwdvault::core::ByteVec short_data(8, std::byte{0});
+    yuli::vault::core::ByteVec short_data(8, std::byte{0});
     auto ph = parse_header(short_data);
     ASSERT_FALSE(ph.ok());
-    EXPECT_EQ(ph.error().code, pwdvault::core::ErrorCode::IpcError);
+    EXPECT_EQ(ph.error().code, yuli::vault::core::ErrorCode::IpcError);
 }
 
 TEST(ProtocolFrame, ParseHeaderWithZeroBytes) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::ByteVec empty;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::ByteVec empty;
     auto ph = parse_header(empty);
     ASSERT_FALSE(ph.ok());
-    EXPECT_EQ(ph.error().code, pwdvault::core::ErrorCode::IpcError);
+    EXPECT_EQ(ph.error().code, yuli::vault::core::ErrorCode::IpcError);
 }
 
 TEST(ProtocolFrame, ParseHeaderMagicMismatch) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 构造 16 字节数据，但 magic 错误
     MessageHeader h;
     h.magic = 0xDeadBeef;  // 错误 magic
@@ -705,15 +721,15 @@ TEST(ProtocolFrame, ParseHeaderMagicMismatch) {
     h.command = CommandId::Ping;
     h.request_id = 1u;
     h.payload_size = 0u;
-    pwdvault::core::ByteVec frame(sizeof(h));
+    yuli::vault::core::ByteVec frame(sizeof(h));
     std::memcpy(frame.data(), &h, sizeof(h));
     auto ph = parse_header(frame);
     ASSERT_FALSE(ph.ok());
-    EXPECT_EQ(ph.error().code, pwdvault::core::ErrorCode::IpcError);
+    EXPECT_EQ(ph.error().code, yuli::vault::core::ErrorCode::IpcError);
 }
 
 TEST(ProtocolFrame, FullRoundTripMultipleCommands) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 模拟 UI 端发送 AddEntryRequest，service 端接收并解析
     AddEntryRequest req{ make_sample_entry() };
     auto payload = serialize(req);
@@ -725,7 +741,7 @@ TEST(ProtocolFrame, FullRoundTripMultipleCommands) {
     EXPECT_EQ(ph.value().first.request_id, 123u);
     ASSERT_EQ(ph.value().first.payload_size, payload.size());
 
-    pwdvault::core::ByteSpan payload_span(
+    yuli::vault::core::ByteSpan payload_span(
         frame.data() + ph.value().second, ph.value().first.payload_size);
     auto r = deserialize<AddEntryRequest>(payload_span);
     ASSERT_TRUE(r.ok()) << r.error().what();
@@ -738,32 +754,32 @@ TEST(ProtocolFrame, FullRoundTripMultipleCommands) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolDeserializeError, TruncatedString) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 仅长度前缀（4 字节），无对应内容
-    pwdvault::core::ByteVec bad;
+    yuli::vault::core::ByteVec bad;
     bad.resize(4);
     const uint32_t len = 100;  // 声称 100 字节
     std::memcpy(bad.data(), &len, sizeof(len));
     auto r = deserialize<std::string>(bad);
     ASSERT_FALSE(r.ok());
-    EXPECT_EQ(r.error().code, pwdvault::core::ErrorCode::InvalidArgument);
+    EXPECT_EQ(r.error().code, yuli::vault::core::ErrorCode::InvalidArgument);
 }
 
 TEST(ProtocolDeserializeError, TruncatedUint32) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::ByteVec bad(2, std::byte{0});  // 仅 2 字节
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::ByteVec bad(2, std::byte{0});  // 仅 2 字节
     auto r = deserialize<uint32_t>(bad);
     ASSERT_FALSE(r.ok());
-    EXPECT_EQ(r.error().code, pwdvault::core::ErrorCode::InvalidArgument);
+    EXPECT_EQ(r.error().code, yuli::vault::core::ErrorCode::InvalidArgument);
 }
 
 TEST(ProtocolDeserializeError, TruncatedPasswordEntry) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 仅 4 字节，远不够 PasswordEntry 的最小序列化长度
-    pwdvault::core::ByteVec bad(4, std::byte{0});
-    auto r = deserialize<pwdvault::core::PasswordEntry>(bad);
+    yuli::vault::core::ByteVec bad(4, std::byte{0});
+    auto r = deserialize<yuli::vault::core::PasswordEntry>(bad);
     ASSERT_FALSE(r.ok());
-    EXPECT_EQ(r.error().code, pwdvault::core::ErrorCode::InvalidArgument);
+    EXPECT_EQ(r.error().code, yuli::vault::core::ErrorCode::InvalidArgument);
 }
 
 // ===========================================================================
@@ -771,8 +787,8 @@ TEST(ProtocolDeserializeError, TruncatedPasswordEntry) {
 // ===========================================================================
 
 TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecord) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::GeneratedPasswordRecord rec;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::GeneratedPasswordRecord rec;
     rec.id = 123;
     rec.password = "P@ssw0rd-Generated!";
     rec.length = 20;
@@ -781,7 +797,7 @@ TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecord) {
     rec.tag = make_bytes("0123456789012345");
 
     auto bytes = serialize(rec);
-    auto r = deserialize<pwdvault::core::GeneratedPasswordRecord>(bytes);
+    auto r = deserialize<yuli::vault::core::GeneratedPasswordRecord>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value().id, rec.id);
     EXPECT_EQ(r.value().password, rec.password);
@@ -793,8 +809,8 @@ TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecord) {
 
 TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecordPlaintextMode) {
     // 明文模式：iv / tag 为空，password 字段直接为明文
-    using namespace pwdvault::protocol;
-    pwdvault::core::GeneratedPasswordRecord rec;
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::GeneratedPasswordRecord rec;
     rec.id = 7;
     rec.password = "plaintext-pwd";
     rec.length = 13;
@@ -802,7 +818,7 @@ TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecordPlaintextMode) {
     // iv / tag 留空
 
     auto bytes = serialize(rec);
-    auto r = deserialize<pwdvault::core::GeneratedPasswordRecord>(bytes);
+    auto r = deserialize<yuli::vault::core::GeneratedPasswordRecord>(bytes);
     ASSERT_TRUE(r.ok()) << r.error().what();
     EXPECT_EQ(r.value().id, rec.id);
     EXPECT_EQ(r.value().password, rec.password);
@@ -813,7 +829,7 @@ TEST(ProtocolCoreRoundtrip, GeneratedPasswordRecordPlaintextMode) {
 }
 
 TEST(ProtocolRequestRoundtrip, RemoveGeneratedRecordRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     RemoveGeneratedRecordRequest req;
     req.id = 999;
     auto bytes = serialize(req);
@@ -823,7 +839,7 @@ TEST(ProtocolRequestRoundtrip, RemoveGeneratedRecordRequest) {
 }
 
 TEST(ProtocolRequestRoundtrip, SetGeneratorLimitRequest) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SetGeneratorLimitRequest req;
     req.limit = 20;
     auto bytes = serialize(req);
@@ -834,7 +850,7 @@ TEST(ProtocolRequestRoundtrip, SetGeneratorLimitRequest) {
 
 TEST(ProtocolRequestRoundtrip, SetGeneratorLimitRequestUnlimited) {
     // 0 = 无限制
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SetGeneratorLimitRequest req;
     req.limit = 0;
     auto bytes = serialize(req);
@@ -844,14 +860,14 @@ TEST(ProtocolRequestRoundtrip, SetGeneratorLimitRequestUnlimited) {
 }
 
 TEST(ProtocolResponseRoundtrip, ListGeneratedRecordsResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     ListGeneratedRecordsResponse resp;
-    pwdvault::core::GeneratedPasswordRecord r1;
+    yuli::vault::core::GeneratedPasswordRecord r1;
     r1.id = 1;
     r1.password = "pwd1";
     r1.length = 4;
     r1.created_at = 100;
-    pwdvault::core::GeneratedPasswordRecord r2;
+    yuli::vault::core::GeneratedPasswordRecord r2;
     r2.id = 2;
     r2.password = "pwd2-longer";
     r2.length = 11;
@@ -874,7 +890,7 @@ TEST(ProtocolResponseRoundtrip, ListGeneratedRecordsResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, ListGeneratedRecordsResponseEmpty) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     ListGeneratedRecordsResponse resp;  // 空
     auto bytes = serialize(resp);
     auto r = deserialize<ListGeneratedRecordsResponse>(bytes);
@@ -883,7 +899,7 @@ TEST(ProtocolResponseRoundtrip, ListGeneratedRecordsResponseEmpty) {
 }
 
 TEST(ProtocolResponseRoundtrip, GetGeneratorSettingsResponse) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     GetGeneratorSettingsResponse resp;
     resp.history_limit = 50;
     auto bytes = serialize(resp);
@@ -893,7 +909,7 @@ TEST(ProtocolResponseRoundtrip, GetGeneratorSettingsResponse) {
 }
 
 TEST(ProtocolResponseRoundtrip, SetGeneratorLimitResponseSuccess) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     SetGeneratorLimitResponse resp;
     resp.success = true;
     auto bytes = serialize(resp);
@@ -903,11 +919,11 @@ TEST(ProtocolResponseRoundtrip, SetGeneratorLimitResponseSuccess) {
 }
 
 TEST(ProtocolDeserializeError, TruncatedGeneratedPasswordRecord) {
-    using namespace pwdvault::protocol;
-    pwdvault::core::ByteVec bad(4, std::byte{0});
-    auto r = deserialize<pwdvault::core::GeneratedPasswordRecord>(bad);
+    using namespace yuli::vault::protocol;
+    yuli::vault::core::ByteVec bad(4, std::byte{0});
+    auto r = deserialize<yuli::vault::core::GeneratedPasswordRecord>(bad);
     ASSERT_FALSE(r.ok());
-    EXPECT_EQ(r.error().code, pwdvault::core::ErrorCode::InvalidArgument);
+    EXPECT_EQ(r.error().code, yuli::vault::core::ErrorCode::InvalidArgument);
 }
 
 // ---------------------------------------------------------------------------
@@ -915,7 +931,7 @@ TEST(ProtocolDeserializeError, TruncatedGeneratedPasswordRecord) {
 // ---------------------------------------------------------------------------
 
 TEST(ProtocolRoundtrip, GeneratedEmptyPayloads) {
-    using namespace pwdvault::protocol;
+    using namespace yuli::vault::protocol;
     // 5 个空负载结构：serialize 返回空 ByteVec，deserialize 空输入返回 Ok
     {
         ListGeneratedRecordsRequest req;

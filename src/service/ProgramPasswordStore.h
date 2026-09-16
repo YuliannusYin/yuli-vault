@@ -25,11 +25,11 @@
 #include "core/Result.h"
 #include "core/Types.h"
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 class ICryptoEngine;
 }
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 /// 程序密码与 encryption_key 持久化存储。
 class ProgramPasswordStore {
@@ -79,4 +79,4 @@ private:
     std::filesystem::path meta_path_;
 };
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

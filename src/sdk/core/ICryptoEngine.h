@@ -23,7 +23,7 @@
 #include "Result.h"
 #include "Types.h"
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 
 /// 加密引擎抽象接口。
 class ICryptoEngine {
@@ -65,4 +65,4 @@ public:
                                  ByteSpan expected_hash) = 0;
 };
 
-}  // namespace pwdvault::core
+}  // namespace yuli::vault::core

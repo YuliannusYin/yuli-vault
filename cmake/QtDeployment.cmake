@@ -11,30 +11,49 @@
 #      imageformats 等），用于正式打包。
 #
 # 典型用法（在目标定义后）：
-#   deploy_qt_runtime(pwdvault-ui)
+#   deploy_qt_runtime(yuli-vault-ui)
 # =============================================================================
 
-# 查找 windeployqt 可执行程序（与 Qt 同源）
-# Qt6 提供 Qt6::windeployqt 导入目标（CMake 3.21+），优先使用；
-# 否则手动在 Qt bin 目录查找。
-function(_pwdvault_find_windeployqt out_var)
+# 查找 windeployqt / qtpaths（官方 Qt 或 vcpkg tools/Qt6/bin）。
+function(_yuli_vault_qt_tool_hints out_var)
+    set(_hints)
+    if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+        list(APPEND _hints
+            "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/Qt6/bin")
+    endif()
+    if(CMAKE_BINARY_DIR)
+        list(APPEND _hints
+            "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/tools/Qt6/bin")
+    endif()
+    if(TARGET Qt6::qmake)
+        get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
+        if(_qmake_executable)
+            get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
+            list(APPEND _hints "${_qt_bin_dir}")
+        endif()
+    endif()
+    set(${out_var} "${_hints}" PARENT_SCOPE)
+endfunction()
+
+function(_yuli_vault_find_windeployqt out_var)
     if(TARGET Qt6::windeployqt)
+        get_target_property(_imported Qt6::windeployqt IMPORTED_LOCATION)
+        if(NOT _imported)
+            get_target_property(_imported Qt6::windeployqt IMPORTED_LOCATION_RELEASE)
+        endif()
+        if(_imported)
+            set(${out_var} "${_imported}" PARENT_SCOPE)
+            return()
+        endif()
         set(${out_var} "Qt6::windeployqt" PARENT_SCOPE)
         return()
     endif()
 
-    # 从 qmake 路径推断 Qt 安装目录
-    get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
-    if(_qmake_executable)
-        get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
-        if(EXISTS "${_qt_bin_dir}/windeployqt.exe")
-            set(${out_var} "${_qt_bin_dir}/windeployqt.exe" PARENT_SCOPE)
-            return()
-        endif()
-    endif()
-
-    # 兜底：在 PATH 中查找
-    find_program(_windeployqt_exe NAMES windeployqt windeployqt.exe)
+    _yuli_vault_qt_tool_hints(_hints)
+    find_program(_windeployqt_exe
+        NAMES windeployqt windeployqt.exe windeployqt6 windeployqt6.exe
+        HINTS ${_hints}
+    )
     if(_windeployqt_exe)
         set(${out_var} "${_windeployqt_exe}" PARENT_SCOPE)
         return()
@@ -43,13 +62,22 @@ function(_pwdvault_find_windeployqt out_var)
     set(${out_var} "" PARENT_SCOPE)
 endfunction()
 
+function(_yuli_vault_find_qtpaths out_var)
+    _yuli_vault_qt_tool_hints(_hints)
+    find_program(_qtpaths_exe
+        NAMES qtpaths qtpaths.exe qtpaths6 qtpaths6.exe
+        HINTS ${_hints}
+    )
+    set(${out_var} "${_qtpaths_exe}" PARENT_SCOPE)
+endfunction()
+
 # 查找 Qt 插件目录。
 # 兼容多种安装布局：
 #   - 标准 Qt 安装：Qt6_DIR=<prefix>/lib/cmake/Qt6，插件在 <prefix>/plugins
 #   - vcpkg 安装：  Qt6_DIR=<prefix>/x64-windows/share/Qt6，
 #                   qmake 在 <prefix>/x64-windows/tools/Qt6/bin，
 #                   插件在 <prefix>/x64-windows/Qt6/plugins
-function(_pwdvault_find_qt_plugins_dir out_var)
+function(_yuli_vault_find_qt_plugins_dir out_var)
     # 1. 优先用 Qt6 CMake 配置提供的 QT6_INSTALL_PLUGINS 变量
     if(DEFINED QT6_INSTALL_PLUGINS AND EXISTS "${QT6_INSTALL_PLUGINS}/platforms/qwindows.dll")
         set(${out_var} "${QT6_INSTALL_PLUGINS}" PARENT_SCOPE)
@@ -109,7 +137,7 @@ endfunction()
 #     imageformats、styles 等），用于正式打包；不可用时仅复制 platforms。
 #
 # 参数：
-#   target     - 必须是可执行目标（如 pwdvault-ui、pwdvault-service）
+#   target     - 必须是可执行目标（如 yuli-vault-ui、yuli-vault-service）
 # -----------------------------------------------------------------------------
 function(deploy_qt_runtime target)
     if(NOT WIN32)
@@ -121,65 +149,80 @@ function(deploy_qt_runtime target)
         message(FATAL_ERROR "deploy_qt_runtime: 目标 '${target}' 不存在")
     endif()
 
-    _pwdvault_find_qt_plugins_dir(_qt_plugins_dir)
-    _pwdvault_find_windeployqt(_windeployqt)
+    _yuli_vault_find_qt_plugins_dir(_qt_plugins_dir)
+    _yuli_vault_find_windeployqt(_windeployqt)
+    _yuli_vault_find_qtpaths(_qtpaths)
 
-    # ----------------------------------------------------------------------
-    # POST_BUILD 阶段：复制 platforms 插件到输出目录
-    # 这是开发期间直接运行 .exe 的关键（Qt 通过 platforms/qwindows.dll
-    # 提供原生窗口系统集成；缺失时弹出 "no Qt platform plugin could be
-    # initialized" 错误）。
-    # ----------------------------------------------------------------------
-    if(_qt_plugins_dir)
-        add_custom_command(TARGET ${target} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                    "$<TARGET_FILE_DIR:${target}>/platforms"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${_qt_plugins_dir}/platforms/qwindows.dll"
-                    "$<TARGET_FILE_DIR:${target}>/platforms/qwindows.dll"
-            COMMENT "deploy_qt_runtime: 复制 Qt platforms 插件到 $<TARGET_FILE_DIR:${target}>"
-            VERBATIM
-        )
-        message(STATUS "deploy_qt_runtime: 已为 ${target} 注册 POST_BUILD platforms 插件复制")
+    set(_wdq_args
+        --no-translations
+        --no-system-d3d-compiler
+        --no-opengl-sw
+        --compiler-runtime
+    )
+    if(_qtpaths)
+        list(APPEND _wdq_args --qtpaths "${_qtpaths}")
+    endif()
 
-        # 复制 SVG imageformat 插件（qsvg.dll）：UI 用大量 SVG 图标，
-        # QIcon 加载 :/icons/*.svg 走 QImageReader 插件机制，缺此 dll
-        # 时所有 SVG 图标都不显示（PNG 如 logo.png 不受影响，为内置格式）。
-        # 仅在 qtsvg 已安装时复制，避免对未启用 SVG 的目标报错。
-        if(EXISTS "${_qt_plugins_dir}/imageformats/qsvg.dll")
-            add_custom_command(TARGET ${target} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                        "$<TARGET_FILE_DIR:${target}>/imageformats"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${_qt_plugins_dir}/imageformats/qsvg.dll"
-                        "$<TARGET_FILE_DIR:${target}>/imageformats/qsvg.dll"
-                COMMENT "deploy_qt_runtime: 复制 Qt SVG imageformat 插件到 $<TARGET_FILE_DIR:${target}>"
-                VERBATIM
-            )
-            message(STATUS "deploy_qt_runtime: 已为 ${target} 注册 POST_BUILD SVG imageformat 插件复制")
+    if(_windeployqt)
+        set(YULI_VAULT_WINDEPLOYQT "${_windeployqt}" CACHE FILEPATH
+            "windeployqt executable used by POST_BUILD and package_inno" FORCE)
+        if(_qtpaths)
+            set(YULI_VAULT_QTPATHS "${_qtpaths}" CACHE FILEPATH
+                "qtpaths executable passed to windeployqt" FORCE)
         endif()
-    else()
-        message(WARNING "deploy_qt_runtime: 未找到 Qt 插件目录，${target} 运行时可能因缺少 platforms 插件失败。"
-                        " 请检查 Qt 安装或 CMAKE_PREFIX_PATH。")
+        set(YULI_VAULT_WINDEPLOYQT_ARGS "${_wdq_args}" CACHE INTERNAL
+            "windeployqt flags")
     endif()
 
     # ----------------------------------------------------------------------
-    # install 阶段：若 windeployqt 可用，调用它做完整部署
+    # POST_BUILD: full deploy when windeployqt exists; otherwise copy plugins.
     # ----------------------------------------------------------------------
     if(_windeployqt)
-        set(_deploy_args
-            --no-translations        # 不部署翻译文件（项目内嵌中文资源）
-            --no-system-d3d-compiler # 不复制 d3dcompiler_47.dll
-            --no-opengl-sw           # 不复制软件 OpenGL
-            --compiler-runtime       # 复制 VC++ 运行时
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "${_windeployqt}"
+                    ${_wdq_args}
+                    "$<TARGET_FILE:${target}>"
+            COMMENT "deploy_qt_runtime: windeployqt $<TARGET_FILE_NAME:${target}>"
+            VERBATIM
         )
+        message(STATUS "deploy_qt_runtime: POST_BUILD windeployqt -> ${_windeployqt}")
+    elseif(_qt_plugins_dir)
+        foreach(_plugin_dir IN ITEMS platforms imageformats styles tls iconengines generic networkinformation)
+            if(EXISTS "${_qt_plugins_dir}/${_plugin_dir}")
+                add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E make_directory
+                            "$<TARGET_FILE_DIR:${target}>/${_plugin_dir}"
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                            "${_qt_plugins_dir}/${_plugin_dir}"
+                            "$<TARGET_FILE_DIR:${target}>/${_plugin_dir}"
+                    COMMENT "deploy_qt_runtime: copy Qt plugin ${_plugin_dir}"
+                    VERBATIM
+                )
+            endif()
+        endforeach()
+        message(STATUS "deploy_qt_runtime: windeployqt not found; POST_BUILD copies plugin dirs")
+    else()
+        message(WARNING "deploy_qt_runtime: no Qt plugins directory; ${target} may fail to start.")
+    endif()
 
+    # ----------------------------------------------------------------------
+    # install 阶段
+    # ----------------------------------------------------------------------
+    if(_windeployqt)
+        set(_qtpaths_install_arg "")
+        if(_qtpaths)
+            set(_qtpaths_install_arg "--qtpaths \"${_qtpaths}\"")
+        endif()
         install(CODE
             "message(STATUS \"正在为 ${target} 部署 Qt 运行时...\")
              execute_process(
                  COMMAND \"${_windeployqt}\"
-                         ${_deploy_args}
-                         --release       # 默认部署 Release 版本 Qt
+                         --no-translations
+                         --no-system-d3d-compiler
+                         --no-opengl-sw
+                         --compiler-runtime
+                         ${_qtpaths_install_arg}
+                         --release
                          \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:${target}>\"
                  WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/bin\"
                  RESULT_VARIABLE _windeployqt_result
@@ -189,15 +232,15 @@ function(deploy_qt_runtime target)
              endif()"
             COMPONENT Runtime
         )
-        message(STATUS "deploy_qt_runtime: 已为 ${target} 注册 windeployqt 安装步骤")
-    else()
-        # windeployqt 不可用时，install 阶段也复制 platforms 插件
-        if(_qt_plugins_dir)
-            install(DIRECTORY "${_qt_plugins_dir}/platforms/"
-                    DESTINATION bin/platforms
-                    COMPONENT Runtime
-                    FILES_MATCHING PATTERN "qwindows.dll")
-            message(STATUS "deploy_qt_runtime: windeployqt 不可用，install 阶段将仅复制 platforms 插件")
-        endif()
+        message(STATUS "deploy_qt_runtime: install-time windeployqt registered")
+    elseif(_qt_plugins_dir)
+        foreach(_plugin_dir IN ITEMS platforms imageformats styles tls iconengines generic networkinformation)
+            if(EXISTS "${_qt_plugins_dir}/${_plugin_dir}")
+                install(DIRECTORY "${_qt_plugins_dir}/${_plugin_dir}/"
+                        DESTINATION "bin/${_plugin_dir}"
+                        COMPONENT Runtime)
+            endif()
+        endforeach()
+        message(STATUS "deploy_qt_runtime: install copies plugin dirs (no windeployqt)")
     endif()
 endfunction()

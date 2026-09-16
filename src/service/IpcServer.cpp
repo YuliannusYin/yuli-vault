@@ -29,7 +29,7 @@
 #include "protocol/Messages.h"
 #include "protocol/Serializer.h"
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 namespace {
 
@@ -429,4 +429,4 @@ void IpcServer::client_loop(HANDLE client_handle) {
     // handle_guard 析构时 CloseHandle
 }
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

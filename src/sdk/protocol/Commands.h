@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace pwdvault::protocol {
+namespace yuli::vault::protocol {
 
 /// IPC 命令枚举。值固定为 uint16_t，便于在消息头中直接序列化。
 enum class CommandId : uint16_t {
@@ -61,4 +61,4 @@ enum class CommandId : uint16_t {
 /// 未知命令返回 "Unknown"。
 std::string_view command_name(CommandId cmd) noexcept;
 
-}  // namespace pwdvault::protocol
+}  // namespace yuli::vault::protocol

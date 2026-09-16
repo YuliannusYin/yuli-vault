@@ -2,7 +2,7 @@
 # =============================================================================
 # src/ui/CMakeLists.txt
 #
-# PwdVault UI 进程（pwdvault-ui.exe）。基于 Qt 6 Widgets，链接 SDK 与协议层。
+# PwdVault UI 进程（yuli-vault-ui.exe）。基于 Qt 6 Widgets，链接 SDK 与协议层。
 # 通过命名管道 IPC 客户端与 service 进程通信。
 # =============================================================================
 # 自动化 MOC/RCC/UIC 由顶层 CMake 的 set(CMAKE_AUTOMOC ON) 等开启
@@ -18,10 +18,10 @@
 # -----------------------------------------------------------------------------
 find_package(Qt6 OPTIONAL_COMPONENTS LinguistTools)
 
-set(PWDVAULT_TRANSLATION_QRC "")
+set(YULI_VAULT_TRANSLATION_QRC "")
 if(Qt6LinguistTools_FOUND)
     set(TS_FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/translations/pwdvault_zh_CN.ts"
+        "${CMAKE_CURRENT_SOURCE_DIR}/translations/yuli-vault_zh_CN.ts"
     )
     # 指定 .qm 输出到当前 binary 目录，路径可预测，便于下方生成的 .qrc 引用
     set_source_files_properties(${TS_FILES}
@@ -36,22 +36,22 @@ if(Qt6LinguistTools_FOUND)
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc"
         "<!DOCTYPE RCC><RCC version=\"1.0\">\n"
         "  <qresource prefix=\"/translations\">\n"
-        "    <file alias=\"pwdvault_zh_CN.qm\">${CMAKE_CURRENT_BINARY_DIR}/pwdvault_zh_CN.qm</file>\n"
+        "    <file alias=\"yuli-vault_zh_CN.qm\">${CMAKE_CURRENT_BINARY_DIR}/yuli-vault_zh_CN.qm</file>\n"
         "  </qresource>\n"
         "</RCC>\n")
     # 额外保险：显式声明 translations.qrc 依赖 .qm（AUTORCC 通常已自动处理）
     set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/translations.qrc"
-        PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/pwdvault_zh_CN.qm")
-    set(PWDVAULT_TRANSLATION_QRC "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc")
-    message(STATUS "PwdVault: Qt6LinguistTools 找到，翻译流水线已启用")
+        PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/yuli-vault_zh_CN.qm")
+    set(YULI_VAULT_TRANSLATION_QRC "${CMAKE_CURRENT_BINARY_DIR}/translations.qrc")
+    message(STATUS "Yuli Vault: Qt6LinguistTools found; translation pipeline enabled")
 else()
-    message(WARNING "PwdVault: Qt6LinguistTools 未找到，跳过 .qm 翻译生成。"
-                    "在 vcpkg.json 中追加 \"qttools\" 依赖后重新配置即可启用翻译。")
+    message(WARNING "Yuli Vault: Qt6LinguistTools not found; skipping .qm generation. "
+                    "Add qttools to vcpkg.json (or install Qt LinguistTools) and reconfigure.")
 endif()
 
 # -----------------------------------------------------------------------------
 # 版本号：configure_file 从 Version.h.in 生成 Version.h
-# 源码引用 PWDVAULT_VERSION 宏而非硬编码版本字符串
+# 源码引用 YULI_VAULT_VERSION 宏而非硬编码版本字符串
 # -----------------------------------------------------------------------------
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/Version.h.in"
@@ -59,10 +59,11 @@ configure_file(
     @ONLY
 )
 
-set(PWDVAULT_UI_SOURCES
+set(YULI_VAULT_UI_SOURCES
     main.cpp
     MainWindow.cpp
     IpcClient.cpp
+    AppSettings.cpp
     Theme.cpp
     IconKit.cpp
     StrengthUtil.cpp
@@ -82,34 +83,34 @@ set(PWDVAULT_UI_SOURCES
     views/GeneratorHistoryDialog.cpp
     views/TagInputWidget.cpp
     resources/resources.qrc
-    pwdvault-ui.rc      # Windows 应用程序图标资源（嵌入多尺寸 ICO）
+    yuli-vault-ui.rc      # Windows 应用程序图标资源（嵌入多尺寸 ICO）
 )
-if(PWDVAULT_TRANSLATION_QRC)
-    list(APPEND PWDVAULT_UI_SOURCES "${PWDVAULT_TRANSLATION_QRC}")
+if(YULI_VAULT_TRANSLATION_QRC)
+    list(APPEND YULI_VAULT_UI_SOURCES "${YULI_VAULT_TRANSLATION_QRC}")
 endif()
-add_executable(pwdvault-ui WIN32 ${PWDVAULT_UI_SOURCES})
-target_include_directories(pwdvault-ui PRIVATE
+add_executable(yuli-vault-ui WIN32 ${YULI_VAULT_UI_SOURCES})
+target_include_directories(yuli-vault-ui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/views
     ${CMAKE_CURRENT_BINARY_DIR}    # 让源码 #include "Version.h" 找到生成的版本头
 )
-target_link_libraries(pwdvault-ui
+target_link_libraries(yuli-vault-ui
     PRIVATE
-        PwdVault::Sdk
-        ${PWDVAULT_QT_LIBS}
-        PwdVault::Warnings
+        YuliVault::Sdk
+        ${YULI_VAULT_QT_LIBS}
+        YuliVault::Warnings
 )
-target_compile_features(pwdvault-ui PRIVATE cxx_std_20)
-set_target_properties(pwdvault-ui PROPERTIES
-    OUTPUT_NAME "pwdvault-ui"
+target_compile_features(yuli-vault-ui PRIVATE cxx_std_20)
+set_target_properties(yuli-vault-ui PROPERTIES
+    OUTPUT_NAME "yuli-vault-ui"
     WIN32_EXECUTABLE ON
 )
 # 安装规则
-install(TARGETS pwdvault-ui RUNTIME DESTINATION bin)
+install(TARGETS yuli-vault-ui RUNTIME DESTINATION bin)
 
 # 部署 Qt 运行时：POST_BUILD 复制 platforms 插件 + install 阶段 windeployqt
 # 必须在此目录调用，因为 add_custom_command(TARGET ...) 要求目标在创建它的
 # 同一目录注册。
-deploy_qt_runtime(pwdvault-ui)
+deploy_qt_runtime(yuli-vault-ui)
 
-message(STATUS "PwdVault: src/ui/ 配置完成（pwdvault-ui 可执行目标）")
+message(STATUS "Yuli Vault: src/ui/ configured (yuli-vault-ui)")

@@ -18,9 +18,9 @@
 #include <algorithm>
 #include <string>
 
-using pwdvault::core::ErrorCode;
-using pwdvault::core::PasswordGeneratorOptions;
-using pwdvault::generator::PasswordGenerator;
+using yuli::vault::core::ErrorCode;
+using yuli::vault::core::PasswordGeneratorOptions;
+using yuli::vault::generator::PasswordGenerator;
 
 namespace {
 
@@ -162,8 +162,8 @@ TEST(PasswordGeneratorTest, EstimateStrengthLowercase8) {
     // 8 位随机小写（避开顺序/键盘序列），8 * log2(26) ≈ 37.6 bit（Weak 区间）
     auto est = gen.estimate_strength("kxqmzbvr");
     EXPECT_NEAR(est.bits, 37, 2);
-    EXPECT_EQ(est.level, pwdvault::core::StrengthLevel::Weak);
-    EXPECT_EQ(est.score, static_cast<int>(pwdvault::core::StrengthLevel::Weak));
+    EXPECT_EQ(est.level, yuli::vault::core::StrengthLevel::Weak);
+    EXPECT_EQ(est.score, static_cast<int>(yuli::vault::core::StrengthLevel::Weak));
     EXPECT_TRUE(est.warnings.empty()) << "随机小写密码无模式警告";
 }
 
@@ -172,15 +172,15 @@ TEST(PasswordGeneratorTest, EstimateStrengthAllClasses16) {
     // 16 * log2(94) ≈ 104.87 bits（落在 VeryStrong 区间 >= 100）
     auto est = gen.estimate_strength("Ab1!Cd2!Ef3!Gh4!");
     EXPECT_NEAR(est.bits, 105, 3);
-    EXPECT_EQ(est.level, pwdvault::core::StrengthLevel::VeryStrong);
-    EXPECT_EQ(est.score, static_cast<int>(pwdvault::core::StrengthLevel::VeryStrong));
+    EXPECT_EQ(est.level, yuli::vault::core::StrengthLevel::VeryStrong);
+    EXPECT_EQ(est.score, static_cast<int>(yuli::vault::core::StrengthLevel::VeryStrong));
 }
 
 TEST(PasswordGeneratorTest, EstimateStrengthEmptyPassword) {
     PasswordGenerator gen;
     auto est = gen.estimate_strength("");
     EXPECT_EQ(est.bits, 0);
-    EXPECT_EQ(est.level, pwdvault::core::StrengthLevel::VeryWeak);
+    EXPECT_EQ(est.level, yuli::vault::core::StrengthLevel::VeryWeak);
     EXPECT_EQ(est.score, 0);
     EXPECT_TRUE(est.warnings.empty());
 }
@@ -196,7 +196,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsRepeatedChars) {
     // 应触发"连续重复字符"警告
     bool has_repeat_warning = false;
     for (const auto& w : est.warnings) {
-        if (w.find("重复") != std::string::npos) has_repeat_warning = true;
+        if (w.find("repeat:") != std::string::npos) has_repeat_warning = true;
     }
     EXPECT_TRUE(has_repeat_warning) << "应检测到连续重复字符";
 }
@@ -207,7 +207,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsSequentialAbc) {
     auto est = gen.estimate_strength("abcdef");
     bool has_seq_warning = false;
     for (const auto& w : est.warnings) {
-        if (w.find("顺序") != std::string::npos) has_seq_warning = true;
+        if (w.find("sequential:") != std::string::npos) has_seq_warning = true;
     }
     EXPECT_TRUE(has_seq_warning) << "应检测到顺序字符序列";
 }
@@ -218,7 +218,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsDescendingSequence) {
     auto est = gen.estimate_strength("4321");
     bool has_seq_warning = false;
     for (const auto& w : est.warnings) {
-        if (w.find("顺序") != std::string::npos) has_seq_warning = true;
+        if (w.find("sequential:") != std::string::npos) has_seq_warning = true;
     }
     EXPECT_TRUE(has_seq_warning);
 }
@@ -229,7 +229,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsKeyboardSequence) {
     auto est = gen.estimate_strength("qwerty12");
     bool has_kb_warning = false;
     for (const auto& w : est.warnings) {
-        if (w.find("键盘") != std::string::npos) has_kb_warning = true;
+        if (w.find("keyboard:") != std::string::npos) has_kb_warning = true;
     }
     EXPECT_TRUE(has_kb_warning);
 }
@@ -240,7 +240,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsReversedKeyboardSequence) {
     auto est = gen.estimate_strength("ytrewq");
     bool has_kb_warning = false;
     for (const auto& w : est.warnings) {
-        if (w.find("键盘") != std::string::npos) has_kb_warning = true;
+        if (w.find("keyboard:") != std::string::npos) has_kb_warning = true;
     }
     EXPECT_TRUE(has_kb_warning);
 }
@@ -267,13 +267,13 @@ TEST(PasswordGeneratorTest, EstimateStrengthLevelThresholds) {
     PasswordGenerator gen;
     // 4 位随机小写 4*log2(26)≈18.8 → VeryWeak (<28)
     EXPECT_EQ(gen.estimate_strength("kxqm").level,
-              pwdvault::core::StrengthLevel::VeryWeak);
+              yuli::vault::core::StrengthLevel::VeryWeak);
     // 8 位小写+数字 8*log2(36)≈41.4 → Weak (>=28, <50)
     EXPECT_EQ(gen.estimate_strength("kxqmzbv9").level,
-              pwdvault::core::StrengthLevel::Weak);
+              yuli::vault::core::StrengthLevel::Weak);
     // 16 位大小写+数字+符号 ≈ 105 bit → VeryStrong (>=100)
     EXPECT_EQ(gen.estimate_strength("Ab1!Cd2!Ef3!Gh4!").level,
-              pwdvault::core::StrengthLevel::VeryStrong);
+              yuli::vault::core::StrengthLevel::VeryStrong);
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +288,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsUnevenDistribution) {
         EXPECT_FALSE(est.warnings.empty());
         bool has_uneven = false;
         for (const auto& w : est.warnings) {
-            if (w.find("分布不均") != std::string::npos) has_uneven = true;
+            if (w.find("uneven") != std::string::npos) has_uneven = true;
         }
         EXPECT_TRUE(has_uneven) << "应检测到字符分布不均";
         // 与等长均匀分布密码对比，bits 应更低
@@ -302,7 +302,7 @@ TEST(PasswordGeneratorTest, EstimateStrengthDetectsUnevenDistribution) {
         EXPECT_FALSE(est.warnings.empty());
         bool has_uneven = false;
         for (const auto& w : est.warnings) {
-            if (w.find("分布不均") != std::string::npos) has_uneven = true;
+            if (w.find("uneven") != std::string::npos) has_uneven = true;
         }
         EXPECT_TRUE(has_uneven);
         auto uniform = gen.estimate_strength("kxqmzbp");  // 7 位小写，无模式
@@ -318,8 +318,8 @@ TEST(PasswordGeneratorTest, EstimateStrengthMediumLevel) {
     PasswordGenerator gen;
     // 9 位大小写+数字，pool=62，熵=9*log2(62)≈53.6 bit（Medium 区间 50~70）
     auto est = gen.estimate_strength("aB3dE7fH2");
-    EXPECT_EQ(est.level, pwdvault::core::StrengthLevel::Medium);
-    EXPECT_EQ(est.score, static_cast<int>(pwdvault::core::StrengthLevel::Medium));
+    EXPECT_EQ(est.level, yuli::vault::core::StrengthLevel::Medium);
+    EXPECT_EQ(est.score, static_cast<int>(yuli::vault::core::StrengthLevel::Medium));
     EXPECT_TRUE(est.warnings.empty()) << "该密码不应触发任何模式惩罚";
 }
 
@@ -327,8 +327,8 @@ TEST(PasswordGeneratorTest, EstimateStrengthStrongLevel) {
     PasswordGenerator gen;
     // 12 位大小写+数字+符号，pool=94，熵=12*log2(94)≈78.5 bit（Strong 区间 70~100）
     auto est = gen.estimate_strength("aB3dE7fH2#kL");
-    EXPECT_EQ(est.level, pwdvault::core::StrengthLevel::Strong);
-    EXPECT_EQ(est.score, static_cast<int>(pwdvault::core::StrengthLevel::Strong));
+    EXPECT_EQ(est.level, yuli::vault::core::StrengthLevel::Strong);
+    EXPECT_EQ(est.score, static_cast<int>(yuli::vault::core::StrengthLevel::Strong));
     EXPECT_TRUE(est.warnings.empty()) << "该密码不应触发任何模式惩罚";
 }
 
@@ -340,17 +340,17 @@ TEST(PasswordGeneratorTest, EstimateStrengthThresholdBoundaries) {
     PasswordGenerator gen;
     // 50 bit 边界：8 位大小写+数字 ≈ 47.6 bit（Weak）；9 位 ≈ 53.6 bit（Medium）
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH").level,
-              pwdvault::core::StrengthLevel::Weak);
+              yuli::vault::core::StrengthLevel::Weak);
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH2").level,
-              pwdvault::core::StrengthLevel::Medium);
+              yuli::vault::core::StrengthLevel::Medium);
     // 70 bit 边界：10 位大小写+数字+符号 ≈ 65.5 bit（Medium）；11 位 ≈ 72.1 bit（Strong）
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH2#").level,
-              pwdvault::core::StrengthLevel::Medium);
+              yuli::vault::core::StrengthLevel::Medium);
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH2#k").level,
-              pwdvault::core::StrengthLevel::Strong);
+              yuli::vault::core::StrengthLevel::Strong);
     // 100 bit 边界：15 位 ≈ 98.3 bit（Strong）；16 位 ≈ 104.9 bit（VeryStrong）
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH2#kL9mQ").level,
-              pwdvault::core::StrengthLevel::Strong);
+              yuli::vault::core::StrengthLevel::Strong);
     EXPECT_EQ(gen.estimate_strength("aB3dE7fH2#kL9mQr").level,
-              pwdvault::core::StrengthLevel::VeryStrong);
+              yuli::vault::core::StrengthLevel::VeryStrong);
 }

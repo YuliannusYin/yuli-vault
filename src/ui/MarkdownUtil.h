@@ -2,7 +2,7 @@
 // =============================================================================
 // MarkdownUtil.h
 //
-// 轻量级 Markdown → HTML 转换器。覆盖备注字段常用语法：
+// 轻量级 Markdown → HTML 转换器。覆盖Notes字段常用语法：
 //   - 标题：# / ## / ###
 //   - 粗体：**text**
 //   - 斜体：*text*
@@ -20,7 +20,7 @@
 #include <QString>
 #include <string>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 /// 将 markdown 源码转换为 HTML 字符串。
 /// \param md markdown 源码（UTF-8）
@@ -30,4 +30,4 @@ QString markdown_to_html(const std::string& md);
 /// 重载：QString 输入。
 QString markdown_to_html(const QString& md);
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

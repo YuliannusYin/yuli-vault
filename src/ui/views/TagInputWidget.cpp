@@ -2,7 +2,7 @@
 // =============================================================================
 // TagInputWidget.cpp
 //
-// 标签输入控件实现。
+// Tags输入控件实现。
 // =============================================================================
 #include "TagInputWidget.h"
 
@@ -19,14 +19,14 @@
 #include "FlowLayout.h"
 #include "Types.h"
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 TagInputWidget::TagInputWidget(QWidget* parent) : QWidget(parent) {
     chips_layout_ = new FlowLayout(this, /*margin=*/0, /*hSpacing=*/6, /*vSpacing=*/6);
 
     input_ = new QLineEdit(this);
     input_->setProperty("cssClass", QStringLiteral("tagInput"));
-    input_->setPlaceholderText(tr("输入标签后回车"));
+    input_->setPlaceholderText(tr("Type a tag and press Enter"));
     input_->setMinimumWidth(120);
     input_->installEventFilter(this);
     chips_layout_->addWidget(input_);
@@ -62,7 +62,7 @@ std::vector<core::Tag> TagInputWidget::selected_tags() const {
 }
 
 void TagInputWidget::rebuild_chips() {
-    // 先把 input_ 从布局中取出（保留 widget，不删除）
+    // 先把 input_ 从布局Medium取出（保留 widget，不Delete）
     // input_ 始终是最后一个 item
     QLayoutItem* input_item = nullptr;
     while (chips_layout_->count() > 0) {
@@ -135,7 +135,7 @@ void TagInputWidget::add_tag_by_name(const QString& name) {
     const std::string name_std = name.toStdString();
     if (name_std.empty()) return;
 
-    // 去重：与已选标签同名（大小写敏感）则跳过
+    // 去重：与已选Tags同名（大小写敏感）则跳过
     for (const auto& t : selected_tags_) {
         if (t.name == name_std) {
             focus_input();
@@ -143,7 +143,7 @@ void TagInputWidget::add_tag_by_name(const QString& name) {
         }
     }
 
-    // 查找已有标签
+    // 查找已有Tags
     core::Tag tag;
     bool found = false;
     for (const auto& t : existing_tags_) {
@@ -154,7 +154,7 @@ void TagInputWidget::add_tag_by_name(const QString& name) {
         }
     }
     if (!found) {
-        // 新标签：id=0 表示尚未分配
+        // 新Tags：id=0 表示尚未分配
         tag.id = 0;
         tag.name = name_std;
     }
@@ -188,4 +188,4 @@ bool TagInputWidget::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

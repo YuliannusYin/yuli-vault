@@ -3,7 +3,7 @@
 // FlowLayout.h
 //
 // 流式布局：子控件按从左到右排列，超出宽度自动换行。用于 TagInputWidget 的
-// 标签芯片排列。基于 Qt 官方 FlowLayout 示例简化实现。
+// Tags芯片排列。基于 Qt 官方 FlowLayout 示例简化实现。
 // =============================================================================
 #pragma once
 
@@ -12,7 +12,7 @@
 #include <QRect>
 #include <QStyle>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 class FlowLayout : public QLayout {
     Q_OBJECT
@@ -43,4 +43,4 @@ private:
     int v_space_;
 };
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

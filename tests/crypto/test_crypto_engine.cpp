@@ -27,14 +27,14 @@ constexpr size_t kIvLen = 12;
 constexpr size_t kTagLen = 16;
 constexpr size_t kSaltLen = crypto_pwhash_argon2id_SALTBYTES;  // 16
 
-pwdvault::core::ByteVec bytes_from_string(const std::string& s) {
-    return pwdvault::core::ByteVec(
+yuli::vault::core::ByteVec bytes_from_string(const std::string& s) {
+    return yuli::vault::core::ByteVec(
         reinterpret_cast<const std::byte*>(s.data()),
         reinterpret_cast<const std::byte*>(s.data()) + s.size());
 }
 
-pwdvault::core::ByteVec random_bytes(size_t n) {
-    pwdvault::core::ByteVec v(n);
+yuli::vault::core::ByteVec random_bytes(size_t n) {
+    yuli::vault::core::ByteVec v(n);
     randombytes_buf(v.data(), n);
     return v;
 }
@@ -46,7 +46,7 @@ protected:
     void SetUp() override {
         encryption_key_ = random_bytes(kKeyLen);
     }
-    pwdvault::core::ByteVec encryption_key_;
+    yuli::vault::core::ByteVec encryption_key_;
 };
 
 // ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ protected:
 // ---------------------------------------------------------------------------
 
 TEST_F(CryptoEngineTest, EncryptDecryptRoundtripNoAAD) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Hello, PwdVault!";
 
     auto enc = engine.encrypt(bytes_from_string(plaintext));
@@ -68,7 +68,7 @@ TEST_F(CryptoEngineTest, EncryptDecryptRoundtripNoAAD) {
 }
 
 TEST_F(CryptoEngineTest, EncryptDecryptRoundtripWithAAD) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Secret message with AAD";
     auto aad = bytes_from_string("associated-data-12345");
 
@@ -81,7 +81,7 @@ TEST_F(CryptoEngineTest, EncryptDecryptRoundtripWithAAD) {
 }
 
 TEST_F(CryptoEngineTest, DecryptWithMismatchedAADFails) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Secret message";
     auto aad = bytes_from_string("correct-aad");
     auto wrong_aad = bytes_from_string("wrong-aad");
@@ -91,12 +91,12 @@ TEST_F(CryptoEngineTest, DecryptWithMismatchedAADFails) {
 
     auto dec = engine.decrypt(enc.value(), wrong_aad);
     ASSERT_FALSE(dec.ok());
-    EXPECT_EQ(dec.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(dec.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 TEST_F(CryptoEngineTest, EmptyPlaintextRoundtrip) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
-    pwdvault::core::ByteVec empty;
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::core::ByteVec empty;
 
     auto enc = engine.encrypt(empty);
     ASSERT_TRUE(enc.ok()) << enc.error().what();
@@ -109,7 +109,7 @@ TEST_F(CryptoEngineTest, EmptyPlaintextRoundtrip) {
 }
 
 TEST_F(CryptoEngineTest, EncryptProducesDifferentCiphertextsForSamePlaintext) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Same plaintext, different IVs";
 
     auto enc1 = engine.encrypt(bytes_from_string(plaintext));
@@ -125,13 +125,13 @@ TEST_F(CryptoEngineTest, EncryptProducesDifferentCiphertextsForSamePlaintext) {
 // ---------------------------------------------------------------------------
 
 TEST_F(CryptoEngineTest, TamperedCiphertextFailsDecryption) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Tamper test payload";
 
     auto enc = engine.encrypt(bytes_from_string(plaintext));
     ASSERT_TRUE(enc.ok());
 
-    pwdvault::core::ByteVec tampered = enc.value();
+    yuli::vault::core::ByteVec tampered = enc.value();
     // 翻转密文中段的一个字节（位于 IV 之后、tag 之前）
     ASSERT_GT(tampered.size(), 20u);
     const size_t idx = 15;
@@ -140,17 +140,17 @@ TEST_F(CryptoEngineTest, TamperedCiphertextFailsDecryption) {
 
     auto dec = engine.decrypt(tampered);
     ASSERT_FALSE(dec.ok());
-    EXPECT_EQ(dec.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(dec.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 TEST_F(CryptoEngineTest, TamperedTagFailsDecryption) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     const std::string plaintext = "Tag tamper test";
 
     auto enc = engine.encrypt(bytes_from_string(plaintext));
     ASSERT_TRUE(enc.ok());
 
-    pwdvault::core::ByteVec tampered = enc.value();
+    yuli::vault::core::ByteVec tampered = enc.value();
     // 翻转最后一个字节（属于 tag）
     const size_t idx = tampered.size() - 1;
     tampered[idx] = static_cast<std::byte>(
@@ -158,21 +158,21 @@ TEST_F(CryptoEngineTest, TamperedTagFailsDecryption) {
 
     auto dec = engine.decrypt(tampered);
     ASSERT_FALSE(dec.ok());
-    EXPECT_EQ(dec.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(dec.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 TEST_F(CryptoEngineTest, ShortCiphertextFailsDecryption) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
-    pwdvault::core::ByteVec short_ct(10);  // < IV(12) + tag(16)
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::core::ByteVec short_ct(10);  // < IV(12) + tag(16)
     auto dec = engine.decrypt(short_ct);
     ASSERT_FALSE(dec.ok());
-    EXPECT_EQ(dec.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(dec.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 TEST_F(CryptoEngineTest, DecryptWithDifferentEncryptionKeyFails) {
-    pwdvault::crypto::CryptoEngine engine1(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine1(encryption_key_);
     auto other_key = random_bytes(kKeyLen);
-    pwdvault::crypto::CryptoEngine engine2(other_key);
+    yuli::vault::crypto::CryptoEngine engine2(other_key);
 
     const std::string plaintext = "Cross-key test";
     auto enc = engine1.encrypt(bytes_from_string(plaintext));
@@ -180,7 +180,7 @@ TEST_F(CryptoEngineTest, DecryptWithDifferentEncryptionKeyFails) {
 
     auto dec = engine2.decrypt(enc.value());
     ASSERT_FALSE(dec.ok());
-    EXPECT_EQ(dec.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(dec.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,15 +188,15 @@ TEST_F(CryptoEngineTest, DecryptWithDifferentEncryptionKeyFails) {
 // ---------------------------------------------------------------------------
 
 TEST_F(CryptoEngineTest, DeriveKeyFailsWithShortSalt) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
-    pwdvault::core::ByteVec short_salt(8);  // < 16
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::core::ByteVec short_salt(8);  // < 16
     auto result = engine.derive_key("password123", short_salt);
     ASSERT_FALSE(result.ok());
-    EXPECT_EQ(result.error().code, pwdvault::core::ErrorCode::CryptoError);
+    EXPECT_EQ(result.error().code, yuli::vault::core::ErrorCode::CryptoError);
 }
 
 TEST_F(CryptoEngineTest, DeriveKeyProduces32Bytes) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
     auto result = engine.derive_key("mypassword", salt);
     ASSERT_TRUE(result.ok()) << result.error().what();
@@ -204,7 +204,7 @@ TEST_F(CryptoEngineTest, DeriveKeyProduces32Bytes) {
 }
 
 TEST_F(CryptoEngineTest, DeriveKeyIsDeterministic) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
     auto r1 = engine.derive_key("mypassword", salt);
     auto r2 = engine.derive_key("mypassword", salt);
@@ -214,7 +214,7 @@ TEST_F(CryptoEngineTest, DeriveKeyIsDeterministic) {
 }
 
 TEST_F(CryptoEngineTest, DeriveKeyDiffersForDifferentPasswords) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
     auto r1 = engine.derive_key("password-A", salt);
     auto r2 = engine.derive_key("password-B", salt);
@@ -228,7 +228,7 @@ TEST_F(CryptoEngineTest, DeriveKeyDiffersForDifferentPasswords) {
 // ---------------------------------------------------------------------------
 
 TEST_F(CryptoEngineTest, GenerateKeyAndIvReturnsCorrectLengths) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto result = engine.generate_key_and_iv();
     ASSERT_TRUE(result.ok()) << result.error().what();
     EXPECT_EQ(result.value().first.size(), kKeyLen);
@@ -236,7 +236,7 @@ TEST_F(CryptoEngineTest, GenerateKeyAndIvReturnsCorrectLengths) {
 }
 
 TEST_F(CryptoEngineTest, GenerateKeyAndIvProducesRandomOutput) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto r1 = engine.generate_key_and_iv();
     auto r2 = engine.generate_key_and_iv();
     ASSERT_TRUE(r1.ok());
@@ -251,7 +251,7 @@ TEST_F(CryptoEngineTest, GenerateKeyAndIvProducesRandomOutput) {
 // ---------------------------------------------------------------------------
 
 TEST_F(CryptoEngineTest, VerifyPasswordCorrectReturnsTrue) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
     auto hash = engine.derive_key("correct-password", salt);
     ASSERT_TRUE(hash.ok());
@@ -260,7 +260,7 @@ TEST_F(CryptoEngineTest, VerifyPasswordCorrectReturnsTrue) {
 }
 
 TEST_F(CryptoEngineTest, VerifyPasswordWrongReturnsFalse) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
     auto hash = engine.derive_key("correct-password", salt);
     ASSERT_TRUE(hash.ok());
@@ -269,15 +269,15 @@ TEST_F(CryptoEngineTest, VerifyPasswordWrongReturnsFalse) {
 }
 
 TEST_F(CryptoEngineTest, VerifyPasswordWithShortSaltReturnsFalse) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
-    pwdvault::core::ByteVec short_salt(8);
-    pwdvault::core::ByteVec dummy_hash(kKeyLen);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::core::ByteVec short_salt(8);
+    yuli::vault::core::ByteVec dummy_hash(kKeyLen);
     EXPECT_FALSE(engine.verify_password("any-password", short_salt, dummy_hash));
 }
 
 TEST_F(CryptoEngineTest, VerifyPasswordWithWrongHashLengthReturnsFalse) {
-    pwdvault::crypto::CryptoEngine engine(encryption_key_);
+    yuli::vault::crypto::CryptoEngine engine(encryption_key_);
     auto salt = random_bytes(kSaltLen);
-    pwdvault::core::ByteVec bad_hash(16);  // 期望 32 字节
+    yuli::vault::core::ByteVec bad_hash(16);  // 期望 32 字节
     EXPECT_FALSE(engine.verify_password("any-password", salt, bad_hash));
 }

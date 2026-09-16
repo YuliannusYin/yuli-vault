@@ -29,7 +29,7 @@
 #undef ERROR
 #endif
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 
 /// 通用结果模板：要么持有值 `T`，要么持有 `Error`。
 ///
@@ -123,4 +123,4 @@ private:
     Error error_;
 };
 
-}  // namespace pwdvault::core
+}  // namespace yuli::vault::core

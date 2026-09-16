@@ -42,7 +42,7 @@
 #include "core/Types.h"
 #include "protocol/Messages.h"
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 class IpcServer {
 public:
@@ -55,7 +55,7 @@ public:
                                     const protocol::MessageHeader& req_header)>;
 
     /// 构造。
-    /// \param pipe_name 管道全名，如 "\\.\pipe\PwdVaultService"
+    /// \param pipe_name 管道全名，如 "\\.\pipe\YuliVaultService"
     /// \param handler 请求处理回调
     IpcServer(std::string_view pipe_name, Handler handler);
 
@@ -117,4 +117,4 @@ private:
     std::vector<std::thread> workers_;
 };
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

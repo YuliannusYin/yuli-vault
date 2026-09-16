@@ -2,7 +2,7 @@
 # =============================================================================
 # src/sdk/core/CMakeLists.txt
 #
-# PwdVault SDK 核心模块（header-only）。定义 pwdvault-sdk-core INTERFACE 库，
+# PwdVault SDK 核心模块（header-only）。定义 yuli-vault-sdk-core INTERFACE 库，
 # 提供：
 #   - Types.h          核心数据类型与公共别名（ByteVec/ByteSpan/PasswordEntry 等）
 #   - Error.h          通用错误类型（ErrorCode + Error）
@@ -15,18 +15,18 @@
 # 子目录中以 STATIC 库形式提供（后续 Task 4/5/6）。
 # =============================================================================
 
-add_library(pwdvault-sdk-core INTERFACE)
-add_library(PwdVault::SdkCore ALIAS pwdvault-sdk-core)
+add_library(yuli-vault-sdk-core INTERFACE)
+add_library(YuliVault::SdkCore ALIAS yuli-vault-sdk-core)
 
-target_include_directories(pwdvault-sdk-core INTERFACE
+target_include_directories(yuli-vault-sdk-core INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 # 强制 C++20（std::span 在 Types.h 中使用）
-target_compile_features(pwdvault-sdk-core INTERFACE cxx_std_20)
+target_compile_features(yuli-vault-sdk-core INTERFACE cxx_std_20)
 
 # 链接项目通用警告配置（INTERFACE target，由顶层 cmake/CompilerWarnings.cmake 定义）
-target_link_libraries(pwdvault-sdk-core INTERFACE PwdVault::Warnings)
+target_link_libraries(yuli-vault-sdk-core INTERFACE YuliVault::Warnings)
 
-message(STATUS "PwdVault: src/sdk/core/ 配置完成（INTERFACE header-only 库）")
+message(STATUS "Yuli Vault: src/sdk/core/ configured (INTERFACE)")

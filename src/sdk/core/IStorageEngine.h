@@ -13,13 +13,14 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "Error.h"
 #include "Result.h"
 #include "Types.h"
 
-namespace pwdvault::core {
+namespace yuli::vault::core {
 
 /// 存储引擎抽象接口。
 class IStorageEngine {
@@ -45,6 +46,15 @@ public:
 
     /// 列出全部条目（按 updated_at 倒序由实现决定）。
     virtual Result<std::vector<PasswordEntry>> list_entries() = 0;
+
+    /// Current schema_version setting (2 = legacy passwords table, 3 = vault_items).
+    virtual int schema_version() = 0;
+
+    /// Rewrite a v2 `passwords` table into v3 `vault_items`. No-op if already v3.
+    /// `rewrap` converts a v2 row (login fields + optional password-only iv/tag)
+    /// into the v3 on-disk form (payload + iv/tag).
+    virtual Error migrate_v2_to_v3(
+        const std::function<Result<VaultItem>(VaultItem)>& rewrap) = 0;
 
     /// 开启事务。
     virtual Error begin_transaction() = 0;
@@ -133,4 +143,4 @@ public:
                                   const std::vector<int64_t>& tag_ids) = 0;
 };
 
-}  // namespace pwdvault::core
+}  // namespace yuli::vault::core

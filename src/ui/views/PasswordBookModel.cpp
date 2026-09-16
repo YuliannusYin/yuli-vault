@@ -6,16 +6,16 @@
 
 #include <QVariant>
 
-// 在 QVariant 中流转 core::PasswordEntry 需注册 metatype。
+// 在 QVariant Medium流转 core::PasswordEntry 需注册 metatype。
 // std::string / std::vector 已被 Qt 内置支持，无需额外注册。
-Q_DECLARE_METATYPE(pwdvault::core::PasswordEntry)
+Q_DECLARE_METATYPE(yuli::vault::core::PasswordEntry)
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 PasswordBookModel::PasswordBookModel(QObject* parent)
     : QAbstractListModel(parent)
 {
-    // 让 QVariant::fromValue 在 queued connections / signal-slot 中可用。
+    // 让 QVariant::fromValue 在 queued connections / signal-slot Medium可用。
     qRegisterMetaType<core::PasswordEntry>();
 }
 
@@ -33,12 +33,12 @@ QVariant PasswordBookModel::data(const QModelIndex& index, int role) const {
     switch (role) {
         case Qt::DisplayRole:
             // 备用：entry_name 回退到 account / website
-            if (!entry.entry_name.empty()) return QString::fromStdString(entry.entry_name);
+            if (!entry.title.empty()) return QString::fromStdString(entry.title);
             if (!entry.account.empty())    return QString::fromStdString(entry.account);
             return QString::fromStdString(entry.website);
         case Qt::ToolTipRole:
             // 长名称 tooltip：显示完整 entry_name（paint 时 elide 截断，tooltip 给完整）
-            return QString::fromStdString(entry.entry_name);
+            return QString::fromStdString(entry.title);
         case Qt::UserRole:
             // 完整 entry 给 delegate 自绘
             return QVariant::fromValue(entry);
@@ -66,4 +66,4 @@ const core::PasswordEntry* PasswordBookModel::entry_by_id(int64_t id) const {
     return nullptr;
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

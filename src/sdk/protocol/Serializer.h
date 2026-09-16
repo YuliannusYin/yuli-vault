@@ -43,7 +43,7 @@
 #include "Result.h"
 #include "Types.h"
 
-namespace pwdvault::protocol {
+namespace yuli::vault::protocol {
 
 // ---------------------------------------------------------------------------
 // 主模板声明（无定义）。每个使用到的类型必须有显式特化。
@@ -313,4 +313,4 @@ core::ByteVec pack_message(CommandId cmd, uint32_t request_id, core::ByteSpan pa
 ///         数据不足或 magic 不匹配时返回 IpcError。
 core::Result<std::pair<MessageHeader, size_t>> parse_header(core::ByteSpan data);
 
-}  // namespace pwdvault::protocol
+}  // namespace yuli::vault::protocol

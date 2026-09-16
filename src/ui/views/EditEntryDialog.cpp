@@ -2,8 +2,8 @@
 // =============================================================================
 // EditEntryDialog.cpp
 //
-// PwdVault 编辑条目对话框实现（新设计）。
-// 模态遮罩 + 560px 居中卡片 + 头部/表单/尾部三段式布局。
+// Yuli Vault Edit条目对话框实现（新设计）。
+// 模态遮罩 + 560px 居Medium卡片 + 头部/表单/尾部三段式布局。
 // =============================================================================
 #include "EditEntryDialog.h"
 #include "ErrorMessages.h"
@@ -34,7 +34,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
@@ -44,7 +44,7 @@ QString format_time(int64_t ts) {
         .toString(QStringLiteral("yyyy-MM-dd HH:mm"));
 }
 
-// 强度等级判定与文案统一通过 StrengthUtil 提供（按 core::StrengthLevel 输入）。
+// Strong度等级判定与文案统一通过 StrengthUtil 提供（按 core::StrengthLevel 输入）。
 
 }  // namespace
 
@@ -56,7 +56,7 @@ EditEntryDialog::EditEntryDialog(IpcClient* client, const core::PasswordEntry& e
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setWindowModality(Qt::ApplicationModal);
     setAttribute(Qt::WA_TranslucentBackground);
-    setWindowTitle(tr("编辑密码条目"));
+    setWindowTitle(tr("Edit login"));
 
     // 自动覆盖父窗口大小
     // parent 通常是 PasswordBookView（MainWindow 的子 widget，非 top-level），
@@ -107,7 +107,7 @@ void EditEntryDialog::build_ui() {
     pencil_icon->setProperty("cssClass", QStringLiteral("inlineIcon"));
     header_layout->addWidget(pencil_icon);
 
-    auto* title = new QLabel(tr("编辑密码条目"), header);
+    auto* title = new QLabel(tr("Edit login"), header);
     title->setProperty("cssClass", QStringLiteral("sectionTitle"));
     header_layout->addWidget(title);
     header_layout->addStretch(1);
@@ -136,7 +136,7 @@ void EditEntryDialog::build_ui() {
     body_layout->setContentsMargins(24, 20, 24, 20);
     body_layout->setSpacing(16);
 
-    // 字段标签样式（支持必填 * 标记）
+    // 字段Tags样式（支持必填 * 标记）
     auto make_label = [body](const QString& text) {
         auto* lbl = new QLabel(text, body);
         lbl->setProperty("cssClass", QStringLiteral("fieldLabel"));
@@ -144,7 +144,7 @@ void EditEntryDialog::build_ui() {
         return lbl;
     };
 
-    // 普通输入框（inputField 容器 + 图标 + 透明 QLineEdit，与密码框风格统一）
+    // 普通输入框（inputField 容器 + 图标 + 透明 QLineEdit，与Password框风格统一）
     auto make_line_edit = [body](QLineEdit*& edit, const QString& icon_path) {
         auto* container = new QFrame(body);
         container->setFixedHeight(40);
@@ -164,35 +164,35 @@ void EditEntryDialog::build_ui() {
         return container;
     };
 
-    // ── *条目名（必填） ──
-    // 必填红星颜色按主题动态决定（QSS 选择器对 QLabel 富文本 span 不生效）
+    // ── *Title（必填） ──
+    // 必填红星颜色按Theme动态决定（QSS 选择器对 QLabel 富文本 span 不生效）
     const QString danger_color = Theme::is_dark()
         ? QStringLiteral("#f56363") : QStringLiteral("#dc2626");
     body_layout->addWidget(make_label(
-        tr("条目名 <span style=\"color:%1;\">*</span>").arg(danger_color)));
+        tr("Title <span style=\"color:%1;\">*</span>").arg(danger_color)));
     body_layout->addWidget(make_line_edit(entry_name_edit_,
         QStringLiteral(":/icons/database.svg")));
-    entry_name_edit_->setText(QString::fromStdString(entry_.entry_name));
-    entry_name_edit_->setPlaceholderText(tr("如：GitHub 个人账号"));
+    entry_name_edit_->setText(QString::fromStdString(entry_.title));
+    entry_name_edit_->setPlaceholderText(tr("e.g. GitHub personal"));
 
-    // ── 用户名（可选） ──
-    body_layout->addWidget(make_label(tr("用户名")));
+    // ── Username（可选） ──
+    body_layout->addWidget(make_label(tr("Username")));
     body_layout->addWidget(make_line_edit(username_edit_,
         QStringLiteral(":/icons/at-sign.svg")));
     username_edit_->setText(QString::fromStdString(entry_.username));
-    username_edit_->setPlaceholderText(tr("显示名，如：张三"));
+    username_edit_->setPlaceholderText(tr("Display name, e.g. Alice"));
 
-    // ── *账号（必填） ──
+    // ── *Account（必填） ──
     body_layout->addWidget(make_label(
-        tr("账号 <span style=\"color:%1;\">*</span>").arg(danger_color)));
+        tr("Account <span style=\"color:%1;\">*</span>").arg(danger_color)));
     body_layout->addWidget(make_line_edit(account_edit_,
         QStringLiteral(":/icons/at-sign.svg")));
     account_edit_->setText(QString::fromStdString(entry_.account));
-    account_edit_->setPlaceholderText(tr("登录账号或邮箱"));
+    account_edit_->setPlaceholderText(tr("Login ID or email"));
 
-    // ── *密码（必填，带可见性 + 生成） ──
+    // ── *Password（必填，带可见性 + Generate） ──
     body_layout->addWidget(make_label(
-        tr("密码 <span style=\"color:%1;\">*</span>").arg(danger_color)));
+        tr("Password <span style=\"color:%1;\">*</span>").arg(danger_color)));
     auto* pwd_container = new QFrame(body);
     pwd_container->setFixedHeight(40);
     pwd_container->setProperty("cssClass", QStringLiteral("inputField"));
@@ -213,13 +213,13 @@ void EditEntryDialog::build_ui() {
     password_edit_->setProperty("cssClass", QStringLiteral("inlineEdit"));
     pwd_layout->addWidget(password_edit_, 1);
 
-    // 生成按钮
+    // Generate按钮
     generate_btn_ = new QPushButton(pwd_container);
     generate_btn_->setIcon(tinted_icon(QStringLiteral(":/icons/wand-2.svg"), IconRole::Normal));
     generate_btn_->setIconSize(QSize(16, 16));
     generate_btn_->setCursor(Qt::PointingHandCursor);
     generate_btn_->setFixedSize(40, 40);
-    generate_btn_->setToolTip(tr("生成密码"));
+    generate_btn_->setToolTip(tr("Generate password"));
     generate_btn_->setProperty("cssClass", QStringLiteral("inlineBtn"));
     pwd_layout->addWidget(generate_btn_);
 
@@ -229,12 +229,12 @@ void EditEntryDialog::build_ui() {
     visibility_btn_->setIconSize(QSize(16, 16));
     visibility_btn_->setCursor(Qt::PointingHandCursor);
     visibility_btn_->setFixedSize(40, 40);
-    visibility_btn_->setToolTip(tr("显示/隐藏密码"));
+    visibility_btn_->setToolTip(tr("Show/hide password"));
     visibility_btn_->setProperty("cssClass", QStringLiteral("inlineBtn"));
     pwd_layout->addWidget(visibility_btn_);
     body_layout->addWidget(pwd_container);
 
-    // 强度行
+    // Strong度行
     auto* strength_row = new QHBoxLayout();
     strength_row->setContentsMargins(0, 4, 0, 0);
     strength_row->setSpacing(8);
@@ -244,32 +244,32 @@ void EditEntryDialog::build_ui() {
     strength_row->addStretch(1);
     body_layout->addLayout(strength_row);
 
-    // ── 网站（可选） ──
-    body_layout->addWidget(make_label(tr("网站")));
+    // ── Website（可选） ──
+    body_layout->addWidget(make_label(tr("Website")));
     body_layout->addWidget(make_line_edit(website_edit_,
         QStringLiteral(":/icons/globe.svg")));
     website_edit_->setText(QString::fromStdString(entry_.website));
     website_edit_->setPlaceholderText(tr("example.com"));
 
-    // ── 标签（可选，芯片流式输入） ──
-    body_layout->addWidget(make_label(tr("标签")));
+    // ── Tags（可选，芯片流式输入） ──
+    body_layout->addWidget(make_label(tr("Tags")));
     tag_input_ = new TagInputWidget(body);
     tag_input_->setProperty("cssClass", QStringLiteral("tagInput"));
     body_layout->addWidget(tag_input_);
-    // 预填已有标签
+    // 预填已有Tags
     tag_input_->set_selected_tags(entry_.tags);
-    // 标签补全列表改由 showEvent 首次显示时异步加载（避免构造期同步 IPC）
+    // Tags补全列表改由 showEvent 首次显示时异步加载（避免构造期同步 IPC）
 
-    // ── 备注（可选，markdown 源码） ──
-    body_layout->addWidget(make_label(tr("备注（markdown）")));
+    // ── Notes（可选，markdown 源码） ──
+    body_layout->addWidget(make_label(tr("Notes (Markdown)")));
     note_edit_ = new QPlainTextEdit(body);
     note_edit_->setPlainText(QString::fromStdString(entry_.note));
     note_edit_->setFixedHeight(96);
     note_edit_->setPlaceholderText(
-        tr("可选：支持 markdown 语法（# 标题、**粗体**、`代码`、- 列表）"));
+        tr("Optional. Markdown is supported (# headings, **bold**, `code`, - lists)."));
     body_layout->addWidget(note_edit_);
 
-    // 更新时间行
+    // 更新Time行
     auto* updated_row = new QHBoxLayout();
     updated_row->setContentsMargins(0, 4, 0, 0);
     updated_row->setSpacing(6);
@@ -278,7 +278,7 @@ void EditEntryDialog::build_ui() {
     clock_icon->setProperty("cssClass", QStringLiteral("inlineIcon"));
     updated_row->addWidget(clock_icon);
     updated_label_ = new QLabel(
-        tr("更新于 %1").arg(format_time(entry_.updated_at)), body);
+        tr("Updated %1").arg(format_time(entry_.updated_at)), body);
     updated_label_->setProperty("cssClass", QStringLiteral("caption"));
     updated_row->addWidget(updated_label_);
     updated_row->addStretch(1);
@@ -305,7 +305,7 @@ void EditEntryDialog::build_ui() {
     footer_layout->setSpacing(12);
     footer_layout->addStretch(1);
 
-    cancel_button_ = new QPushButton(tr("取消"), footer);
+    cancel_button_ = new QPushButton(tr("Cancel"), footer);
     cancel_button_->setCursor(Qt::PointingHandCursor);
     cancel_button_->setFixedHeight(40);
     cancel_button_->setProperty("cssClass", QStringLiteral("outline"));
@@ -314,7 +314,7 @@ void EditEntryDialog::build_ui() {
     save_button_ = new QPushButton(footer);
     save_button_->setIcon(tinted_icon(QStringLiteral(":/icons/save.svg"), IconRole::OnPrimary));
     save_button_->setIconSize(QSize(16, 16));
-    save_button_->setText(tr("保存修改"));
+    save_button_->setText(tr("Save changes"));
     save_button_->setCursor(Qt::PointingHandCursor);
     save_button_->setFixedHeight(40);
     save_button_->setProperty("cssClass", QStringLiteral("primary"));
@@ -331,7 +331,7 @@ void EditEntryDialog::build_ui() {
             this, &EditEntryDialog::on_cancel_clicked);
     connect(save_button_, &QPushButton::clicked,
             this, &EditEntryDialog::on_save_clicked);
-    // 密码字段按 Enter 直接触发保存；其余字段保持 Qt 默认 focusNextChild 跳转。
+    // Password字段按 Enter 直接触发保存；其余字段保持 Qt 默认 focusNextChild 跳转。
     // 不重写 keyPressEvent 拦截 Enter，避免影响 QDialog 默认行为
     connect(password_edit_, &QLineEdit::returnPressed,
             this, &EditEntryDialog::on_save_clicked);
@@ -342,11 +342,11 @@ void EditEntryDialog::build_ui() {
     connect(password_edit_, &QLineEdit::textChanged,
             this, &EditEntryDialog::on_password_changed);
 
-    // 强度评估 debounce：每次输入触发 IPC 会卡顿，用 300ms 计时器合并连续输入。
+    // Strong度评估 debounce：每次输入触发 IPC 会卡顿，用 300ms 计时器合并连续输入。
     strength_timer_ = new QTimer(this);
     strength_timer_->setSingleShot(true);
     connect(strength_timer_, &QTimer::timeout, this, [this]() {
-        // 异步发起强度评估：QtConcurrent 线程池执行 IPC，finished 回主线程更新 UI。
+        // 异步发起Strong度评估：QtConcurrent 线程池执行 IPC，finished 回主线程更新 UI。
         if (!client_ || pending_password_.isEmpty()) {
             update_strength_ui(core::StrengthEstimate{});
             return;
@@ -359,26 +359,26 @@ void EditEntryDialog::build_ui() {
             if (r.ok()) {
                 update_strength_ui(r.value().estimate);
             }
-            // 失败静默：强度文案保持上一次状态，不打扰用户输入
+            // 失败静默：Strong度文案保持上一次状态，不打扰用户输入
             watcher->deleteLater();
         });
         watcher->setFuture(client_->estimate_strength_async(pwd));
     });
 
-    // 初始强度：通过 update_strength 入口设置 pending_password_ 并启动 debounce
+    // 初始Strong度：通过 update_strength 入口Settings pending_password_ 并启动 debounce
     update_strength(QString::fromStdString(entry_.password));
     entry_name_edit_->setFocus();
 }
 
 void EditEntryDialog::closeEvent(QCloseEvent* event) {
-    // 关闭 = 取消
+    // Close = Cancel
     reject();
     QDialog::closeEvent(event);
 }
 
 void EditEntryDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
-    // Task 28：首次显示时异步加载标签补全列表，避免重复加载
+    // Task 28：首次显示时异步加载Tags补全列表，避免重复加载
     if (!tags_loaded_) {
         tags_loaded_ = true;
         refresh_existing_tags_async();
@@ -409,7 +409,7 @@ void EditEntryDialog::on_toggle_password_clicked() {
 
 void EditEntryDialog::on_generate_clicked() {
     if (!client_) return;
-    // 使用默认参数生成
+    // 使用默认参数Generate
     core::PasswordGeneratorOptions opts;
     opts.length = 20;
     opts.use_uppercase = true;
@@ -420,8 +420,8 @@ void EditEntryDialog::on_generate_clicked() {
     if (r.ok()) {
         password_edit_->setText(QString::fromStdString(r.value().password));
     } else {
-        QMessageBox::warning(this, tr("生成失败"),
-            tr("无法生成密码：%1")
+        QMessageBox::warning(this, tr("Generation failed"),
+            tr("Could not generate a password: %1")
                 .arg(QString::fromStdString(r.error().what())));
     }
 }
@@ -431,7 +431,7 @@ void EditEntryDialog::on_password_changed(const QString& text) {
     pending_password_ = text;
     if (strength_timer_) {
         if (text.isEmpty()) {
-            // 立即清空强度文案，避免空密码还显示上一次的强度
+            // 立即清空Strong度文案，避免空Password还显示上一次的Strong度
             strength_timer_->stop();
             update_strength_ui(core::StrengthEstimate{});
         } else {
@@ -445,7 +445,7 @@ void EditEntryDialog::on_save_clicked() {
     set_error(QString());
 
     if (!client_) {
-        set_error(tr("内部错误：IPC 客户端不可用。"));
+        set_error(tr("Internal error: IPC client is unavailable."));
         return;
     }
 
@@ -457,23 +457,23 @@ void EditEntryDialog::on_save_clicked() {
 
     // 必填校验：entry_name / account / password
     if (entry_name.isEmpty()) {
-        set_error(tr("条目名不能为空。"));
+        set_error(tr("Title cannot be empty."));
         entry_name_edit_->setFocus();
         return;
     }
     if (account.isEmpty()) {
-        set_error(tr("账号不能为空。"));
+        set_error(tr("Account cannot be empty."));
         account_edit_->setFocus();
         return;
     }
     if (password.isEmpty()) {
-        set_error(tr("密码不能为空。"));
+        set_error(tr("Password cannot be empty."));
         password_edit_->setFocus();
         return;
     }
 
     core::PasswordEntry updated = entry_;
-    updated.entry_name = entry_name.toStdString();
+    updated.title = entry_name.toStdString();
     updated.account = account.toStdString();
     updated.username = username.toStdString();
     updated.password = password.toStdString();
@@ -483,24 +483,24 @@ void EditEntryDialog::on_save_clicked() {
         updated.tags = tag_input_->selected_tags();
     }
 
-    // 异步保存：禁用按钮 + 文案改为「保存中…」，回调中恢复
+    // 异步保存：Disable按钮 + 文案改为「Saving…」，回调Medium恢复
     saving_ = true;
     save_button_->setEnabled(false);
-    save_button_->setText(tr("保存中…"));
+    save_button_->setText(tr("Saving…"));
 
     auto* watcher = new QFutureWatcher<core::Result<protocol::UpdateEntryResponse>>(this);
     connect(watcher, &QFutureWatcher<core::Result<protocol::UpdateEntryResponse>>::finished,
             this, [this, watcher]() {
         saving_ = false;
         save_button_->setEnabled(true);
-        save_button_->setText(tr("保存修改"));
+        save_button_->setText(tr("Save changes"));
 
         auto result = watcher->result();
         if (result.ok()) {
             entry_ = result.value().entry;
             // Toast 显示在 parentWidget（PasswordBookView）：accept() 后 this 即将销毁，
             // 不能把 toast 挂在即将销毁的对话框上。
-            Toast::show(this->parentWidget(), tr("修改已保存"));
+            Toast::show(this->parentWidget(), tr("Changes saved"));
             emit entry_updated(entry_.id);
             accept();
         } else {
@@ -521,7 +521,7 @@ void EditEntryDialog::on_cancel_clicked() {
 
 void EditEntryDialog::update_strength(const QString& password) {
     // 入口：保留同步签名以兼容旧调用点。实际异步流程通过 on_password_changed
-    // + strength_timer_ timeout 处理。这里仅同步刷新 UI 状态（空密码立即清空）。
+    // + strength_timer_ timeout 处理。这里仅同步Refresh UI 状态（空Password立即清空）。
     pending_password_ = password;
     if (password.isEmpty()) {
         update_strength_ui(core::StrengthEstimate{});
@@ -533,22 +533,22 @@ void EditEntryDialog::update_strength(const QString& password) {
 void EditEntryDialog::update_strength_ui(const core::StrengthEstimate& estimate) {
     if (!strength_label_) return;
 
-    // 空密码：重置为初始状态（「强度：-」），不展示评估结果
+    // 空Password：重置为初始状态（「Strength: —」），不展示评估结果
     if (pending_password_.isEmpty()) {
-        strength_label_->setText(tr("强度：-"));
+        strength_label_->setText(tr("Strength: —"));
         strength_label_->setProperty("cssClass", QStringLiteral("caption"));
         strength_label_->style()->unpolish(strength_label_);
         strength_label_->style()->polish(strength_label_);
         return;
     }
 
-    // 通过 cssClass 让 QSS 接管颜色（深浅主题适配）
+    // 通过 cssClass 让 QSS 接管颜色（深浅Theme适配）
     const QString label_class = strength_label_class(estimate.level);
     strength_label_->setProperty("cssClass", label_class);
     strength_label_->style()->unpolish(strength_label_);
     strength_label_->style()->polish(strength_label_);
     strength_label_->setText(
-        tr("强度：%1（%2 bit）").arg(strength_text(estimate.level)).arg(estimate.bits));
+        tr("Strength: %1 (%2 bits)").arg(strength_text(estimate.level)).arg(estimate.bits));
 }
 
 void EditEntryDialog::set_error(const QString& message) {
@@ -558,7 +558,7 @@ void EditEntryDialog::set_error(const QString& message) {
 }
 
 void EditEntryDialog::refresh_existing_tags() {
-    // 同步入口（向后兼容）：实际由 async 版本执行 IPC
+    // 同步入口（向后兼容）：实际由 async Version执行 IPC
     refresh_existing_tags_async();
 }
 
@@ -577,4 +577,4 @@ void EditEntryDialog::refresh_existing_tags_async() {
     watcher->setFuture(client_->list_tags_async());
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui

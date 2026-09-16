@@ -36,10 +36,11 @@
 #include "Commands.h"
 #include "Messages.h"
 #include "Serializer.h"
+#include "VaultPayload.h"
 
 #include <sodium.h>
 
-namespace pwdvault::service {
+namespace yuli::vault::service {
 
 namespace {
 
@@ -86,8 +87,9 @@ ServiceCore::ServiceCore(std::unique_ptr<core::ICryptoEngine> crypto,
     // 启动时检测程序密码是否已启用
     password_enabled_ = password_store_->exists();
     if (!password_enabled_) {
-        // 明文模式：自动解锁
+        // 明文模式：自动解锁，并将复制过来的 v2 库升级为 v3。
         unlocked_ = true;
+        (void)migrate_legacy_schema_unlocked();
     }
     // 加密模式下 unlocked_ 保持 false，需用户 Unlock 后才解锁
 }
@@ -127,8 +129,9 @@ core::ByteVec ServiceCore::make_error(core::ErrorCode code, std::string message)
 
 core::Result<core::PasswordEntry> ServiceCore::encrypt_entry(
     core::PasswordEntry entry) const {
-    // 明文模式：不做加密，password 保持明文，iv/tag 为空
+    core::ByteVec plain = core::encode_item_payload(entry);
     if (!password_enabled_) {
+        entry.payload = std::move(plain);
         entry.iv.clear();
         entry.tag.clear();
         return core::Result<core::PasswordEntry>::Ok(std::move(entry));
@@ -139,38 +142,30 @@ core::Result<core::PasswordEntry> ServiceCore::encrypt_entry(
             core::Error(core::ErrorCode::Unauthorized, "vault is locked"));
     }
 
-    // 明文 password → ByteSpan
-    core::ByteSpan plaintext(
-        reinterpret_cast<const std::byte*>(entry.password.data()),
-        entry.password.size());
-
+    core::ByteSpan plaintext(plain.data(), plain.size());
     auto enc_result = entry_crypto_->encrypt(plaintext);
     if (!enc_result) {
         return core::Result<core::PasswordEntry>::Err(enc_result.error());
     }
 
     const auto& blob = *enc_result;
-    // blob = [IV(12) || ciphertext || tag(16)]
     if (blob.size() < kIvLen + kTagLen) {
         return core::Result<core::PasswordEntry>::Err(
             core::Error(core::ErrorCode::CryptoError, "ciphertext blob too short"));
     }
 
-    // 拆分
     entry.iv.assign(blob.begin(), blob.begin() + kIvLen);
     entry.tag.assign(blob.end() - kTagLen, blob.end());
-    // password 字段存密文部分
-    entry.password.assign(
-        reinterpret_cast<const char*>(blob.data() + kIvLen),
-        blob.size() - kIvLen - kTagLen);
-
+    entry.payload.assign(blob.begin() + kIvLen, blob.end() - kTagLen);
     return core::Result<core::PasswordEntry>::Ok(std::move(entry));
 }
 
 core::Result<core::PasswordEntry> ServiceCore::decrypt_entry(
     core::PasswordEntry entry) const {
-    // 明文模式：不做解密，password 已是明文
     if (!password_enabled_) {
+        if (!entry.payload.empty()) {
+            (void)core::try_decode_item_payload(entry, entry.payload);
+        }
         return core::Result<core::PasswordEntry>::Ok(std::move(entry));
     }
 
@@ -179,25 +174,55 @@ core::Result<core::PasswordEntry> ServiceCore::decrypt_entry(
             core::Error(core::ErrorCode::Unauthorized, "vault is locked"));
     }
 
-    // 重新拼装 [IV || ciphertext || tag]
+    // Legacy v2 rows store password ciphertext in `password` + iv/tag.
+    // v3 rows store payload ciphertext in `payload` + iv/tag.
     core::ByteVec blob;
-    blob.reserve(entry.iv.size() + entry.password.size() + entry.tag.size());
-    blob.insert(blob.end(), entry.iv.begin(), entry.iv.end());
-    blob.insert(blob.end(),
-                reinterpret_cast<const std::byte*>(entry.password.data()),
-                reinterpret_cast<const std::byte*>(entry.password.data()) +
-                    entry.password.size());
-    blob.insert(blob.end(), entry.tag.begin(), entry.tag.end());
+    if (!entry.payload.empty() && !entry.iv.empty()) {
+        blob.reserve(entry.iv.size() + entry.payload.size() + entry.tag.size());
+        blob.insert(blob.end(), entry.iv.begin(), entry.iv.end());
+        blob.insert(blob.end(), entry.payload.begin(), entry.payload.end());
+        blob.insert(blob.end(), entry.tag.begin(), entry.tag.end());
+    } else {
+        blob.reserve(entry.iv.size() + entry.password.size() + entry.tag.size());
+        blob.insert(blob.end(), entry.iv.begin(), entry.iv.end());
+        blob.insert(blob.end(),
+                    reinterpret_cast<const std::byte*>(entry.password.data()),
+                    reinterpret_cast<const std::byte*>(entry.password.data()) +
+                        entry.password.size());
+        blob.insert(blob.end(), entry.tag.begin(), entry.tag.end());
+    }
 
     auto dec_result = entry_crypto_->decrypt(blob);
     if (!dec_result) {
         return core::Result<core::PasswordEntry>::Err(dec_result.error());
     }
 
-    entry.password = std::move(*dec_result);
+    const std::string& plain = *dec_result;
+    core::ByteSpan plain_span(
+        reinterpret_cast<const std::byte*>(plain.data()), plain.size());
+    if (!core::try_decode_item_payload(entry, plain_span)) {
+        // v2: decrypt produced the password string only.
+        entry.password = plain;
+        entry.type = core::VaultItemType::Login;
+    }
     entry.iv.clear();
     entry.tag.clear();
+    entry.payload.clear();
     return core::Result<core::PasswordEntry>::Ok(std::move(entry));
+}
+
+core::Error ServiceCore::migrate_legacy_schema_unlocked() {
+    if (storage_->schema_version() >= 3) {
+        return core::Error{};
+    }
+    return storage_->migrate_v2_to_v3([this](core::VaultItem row) {
+        // v2: password column may be ciphertext; decrypt_entry understands that.
+        auto dec = decrypt_entry(std::move(row));
+        if (!dec) {
+            return core::Result<core::VaultItem>::Err(dec.error());
+        }
+        return encrypt_entry(std::move(*dec));
+    });
 }
 
 core::Result<core::GeneratedPasswordRecord> ServiceCore::encrypt_generated_record(
@@ -366,8 +391,8 @@ core::ByteVec ServiceCore::handle_unlock(core::ByteSpan payload) {
         if (remaining_sec < 0) remaining_sec = 0;
         protocol::UnlockResponse resp;
         resp.success = false;
-        resp.error_message = "已锁定，请 " + std::to_string(remaining_sec) +
-                             " 秒后重试";
+        resp.error_message = "Locked, retry in " + std::to_string(remaining_sec) +
+                             " seconds";
         return protocol::serialize(resp);
     }
 
@@ -381,22 +406,32 @@ core::ByteVec ServiceCore::handle_unlock(core::ByteSpan payload) {
                 kLockoutDuration).count();
             protocol::UnlockResponse resp;
             resp.success = false;
-            resp.error_message = "密码错误次数过多，已锁定，请 " +
-                                 std::to_string(lockout_sec) + " 秒后重试";
+            resp.error_message = "Too many incorrect passwords, locked. Retry in " +
+                                 std::to_string(lockout_sec) + " seconds";
             return protocol::serialize(resp);
         }
         // 普通失败：返回剩余尝试次数，UI 同步显示
         const int remaining = kMaxLoginAttempts - login_attempts_;
         protocol::UnlockResponse resp;
         resp.success = false;
-        resp.error_message = "密码错误，剩余 " + std::to_string(remaining) +
-                             " 次尝试";
+        resp.error_message = "Incorrect password, " + std::to_string(remaining) +
+                             " attempts remaining";
         return protocol::serialize(resp);
     }
 
     set_encryption_key(std::move(*unlock_result));
     unlocked_ = true;
     login_attempts_ = 0;
+
+    auto mig = migrate_legacy_schema_unlocked();
+    if (!mig.ok()) {
+        clear_encryption_key();
+        unlocked_ = false;
+        protocol::UnlockResponse resp;
+        resp.success = false;
+        resp.error_message = std::string("failed to migrate vault schema: ") + mig.what();
+        return protocol::serialize(resp);
+    }
 
     protocol::UnlockResponse resp;
     resp.success = true;
@@ -672,11 +707,11 @@ core::ByteVec ServiceCore::handle_add_entry(core::ByteSpan payload) {
     }
 
     // 必填字段校验：entry_name / account / password
-    if (req_result->entry.entry_name.empty() ||
+    if (req_result->entry.title.empty() ||
         req_result->entry.account.empty() ||
         req_result->entry.password.empty()) {
         return make_error(core::ErrorCode::InvalidArgument,
-                          "entry_name / account / password must not be empty");
+                          "title / account / password must not be empty");
     }
 
     // 保存明文副本用于响应
@@ -725,11 +760,11 @@ core::ByteVec ServiceCore::handle_update_entry(core::ByteSpan payload) {
     }
 
     // 必填字段校验：entry_name / account / password
-    if (req_result->entry.entry_name.empty() ||
+    if (req_result->entry.title.empty() ||
         req_result->entry.account.empty() ||
         req_result->entry.password.empty()) {
         return make_error(core::ErrorCode::InvalidArgument,
-                          "entry_name / account / password must not be empty");
+                          "title / account / password must not be empty");
     }
 
     core::PasswordEntry plain_entry = req_result->entry;
@@ -813,7 +848,9 @@ core::ByteVec ServiceCore::handle_search_entries(core::ByteSpan payload) {
                           std::string("malformed SearchEntriesRequest: ") +
                               req_result.error().what());
     }
-    auto search_result = storage_->search_entries(req_result->query);
+    core::SearchQuery tag_filter;
+    tag_filter.tag_ids = req_result->query.tag_ids;
+    auto search_result = storage_->search_entries(tag_filter);
     if (!search_result) {
         return make_error(search_result.error().code, search_result.error().what());
     }
@@ -824,7 +861,9 @@ core::ByteVec ServiceCore::handle_search_entries(core::ByteSpan payload) {
         if (!dec_result) {
             return make_error(dec_result.error().code, dec_result.error().what());
         }
-        resp.entries.push_back(std::move(*dec_result));
+        if (core::item_matches_text_query(*dec_result, req_result->query)) {
+            resp.entries.push_back(std::move(*dec_result));
+        }
     }
     return protocol::serialize(resp);
 }
@@ -1193,4 +1232,4 @@ core::ByteVec ServiceCore::handle_set_entry_tags(core::ByteSpan payload) {
     return protocol::serialize(protocol::SetEntryTagsResponse{});
 }
 
-}  // namespace pwdvault::service
+}  // namespace yuli::vault::service

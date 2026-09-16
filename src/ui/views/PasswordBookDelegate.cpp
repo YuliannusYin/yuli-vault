@@ -5,8 +5,10 @@
 #include "PasswordBookDelegate.h"
 #include "IconKit.h"
 #include "Theme.h"
+#include "VaultItemUi.h"
 
 #include <QBrush>
+#include <QCoreApplication>
 #include <QFontMetrics>
 #include <QPainter>
 #include <QPainterPath>
@@ -14,13 +16,14 @@
 #include <QStyle>
 #include <QVariant>
 
+#include <algorithm>
 #include <string>
 
-namespace pwdvault::ui {
+namespace yuli::vault::ui {
 
 namespace {
 
-/// 列表项统一高度（含标签与不含标签均使用此高度，便于 setUniformItemSizes）。
+/// 列表项统一高度（含Tags与不含Tags均使用此高度，便于 setUniformItemSizes）。
 constexpr int kItemHeight = 72;
 /// 列表项左右内边距。
 constexpr int kPaddingH = 12;
@@ -32,15 +35,15 @@ constexpr int kAvatarSize = 40;
 constexpr int kAvatarGap = 10;
 /// chevron 尺寸。
 constexpr int kChevronSize = 16;
-/// 名称与标签行垂直间距。
+/// 名称与Tags行垂直间距。
 constexpr int kLineGap = 4;
-/// 标签 chip 之间水平间距。
+/// Tags chip 之间水平间距。
 constexpr int kChipSpacing = 4;
-/// 标签 chip 左右内边距。
+/// Tags chip 左右内边距。
 constexpr int kChipPadH = 6;
-/// 标签 chip 上下内边距。
+/// Tags chip 上下内边距。
 constexpr int kChipPadV = 1;
-/// 标签 chip 圆角。
+/// Tags chip 圆角。
 constexpr int kChipRadius = 9;
 /// 头像圆角（直径的一半 = 圆形）。
 constexpr int kAvatarRadius = 20;
@@ -53,16 +56,16 @@ QString avatar_letter(const std::string& text) {
     return ch;
 }
 
-/// 主题相关颜色组：dark / light 各一组。
+/// Theme相关颜色组：dark / light 各一组。
 struct ThemePalette {
     QColor avatar_bg;       ///< 头像圆形背景
     QColor avatar_fg;       ///< 头像字符颜色
-    QColor name_color;      ///< 条目名文字色
-    QColor chip_bg;         ///< 标签 chip 背景
-    QColor chip_fg;         ///< 标签 chip 文字
-    QColor chip_border;     ///< 标签 chip 边框
+    QColor name_color;      ///< Title文字色
+    QColor chip_bg;         ///< Tags chip 背景
+    QColor chip_fg;         ///< Tags chip 文字
+    QColor chip_border;     ///< Tags chip 边框
     QColor chip_more_fg;    ///< "+N" 文字色
-    QColor selected_bg;     ///< 选中态背景
+    QColor selected_bg;     ///< 选Medium态背景
     QColor hover_bg;        ///< 悬停态背景
 };
 
@@ -99,7 +102,7 @@ ThemePalette palette_for_theme() {
 PasswordBookDelegate::PasswordBookDelegate(QObject* parent)
     : QStyledItemDelegate(parent)
 {
-    // 主题切换时清空 chevron pixmap 缓存，下次 paint 自动按新主题重新渲染。
+    // Theme切换时清空 chevron pixmap 缓存，下次 paint 自动按新Theme重新渲染。
     if (auto* theme = Theme::instance()) {
         QObject::connect(theme, &Theme::theme_changed,
                          parent ? parent : this, [this]() { clear_pixmap_cache(); });
@@ -126,8 +129,8 @@ void PasswordBookDelegate::paint(QPainter* painter,
 
     const auto pal = palette_for_theme();
 
-    // ── 1. 背景（选中 / 悬停 / 默认） ──
-    // 选中态优先于悬停态。QPainter 无 fillRoundedRect，用 path + fillPath。
+    // ── 1. 背景（选Medium / 悬停 / 默认） ──
+    // 选Medium态优先于悬停态。QPainter 无 fillRoundedRect，用 path + fillPath。
     QRect bg_rect = option.rect.adjusted(kPaddingH / 2, 2, -kPaddingH / 2, -2);
     if (option.state & QStyle::State_Selected) {
         QPainterPath bg_path;
@@ -143,13 +146,13 @@ void PasswordBookDelegate::paint(QPainter* painter,
     const auto entry = index.data(Qt::UserRole).value<core::PasswordEntry>();
 
     // 头像字符优先级：entry_name → account → website
-    std::string avatar_src = entry.entry_name;
+    std::string avatar_src = entry.title;
     if (avatar_src.empty()) avatar_src = entry.account;
     if (avatar_src.empty()) avatar_src = entry.website;
     const QString avatar_text = avatar_letter(avatar_src);
 
     // 名称（用于显示）同样回退
-    std::string title_src = entry.entry_name;
+    std::string title_src = entry.title;
     if (title_src.empty()) title_src = entry.account;
     if (title_src.empty()) title_src = entry.website;
     const QString name_text = QString::fromStdString(title_src);
@@ -194,48 +197,43 @@ void PasswordBookDelegate::paint(QPainter* painter,
     painter->setPen(pal.name_color);
     painter->drawText(name_rect, Qt::AlignLeft | Qt::AlignVCenter, elided_name);
 
-    // ── 5. 标签 chips（最多 3 个 + "+N"，无标签时不绘制） ──
-    if (!entry.tags.empty()) {
+    // Type badge + optional tags (type is always shown so later item kinds can coexist).
+    {
         QFont chip_font = option.font;
         chip_font.setPixelSize(10);
         const QFontMetrics chip_fm(chip_font);
-
         const int chip_y = name_rect.bottom() + kLineGap;
         const int chip_height = chip_fm.height() + kChipPadV * 2;
-
         int chip_x = avatar_rect.right() + kAvatarGap;
-        const size_t max_show = 3;
-        const size_t show_count = std::min(entry.tags.size(), max_show);
+        const int chip_right = option.rect.right() - kPaddingH - kChevronSize - kPaddingH;
 
-        painter->setFont(chip_font);
-        for (size_t i = 0; i < show_count; ++i) {
-            const QString chip_text = QString::fromStdString(entry.tags[i].name);
+        auto draw_chip = [&](const QString& chip_text, bool more_style) {
             const int text_w = chip_fm.horizontalAdvance(chip_text);
             const int chip_w = text_w + kChipPadH * 2;
+            if (chip_x + chip_w > chip_right) return false;
             const QRect chip_rect(chip_x, chip_y, chip_w, chip_height);
-
-            // 圆角背景 + 边框
             QPainterPath chip_path;
             chip_path.addRoundedRect(QRectF(chip_rect), kChipRadius, kChipRadius);
             painter->fillPath(chip_path, pal.chip_bg);
             painter->setPen(QPen(pal.chip_border, 1));
             painter->drawPath(chip_path);
-
-            // 文字
-            painter->setPen(pal.chip_fg);
+            painter->setPen(more_style ? pal.chip_more_fg : pal.chip_fg);
             painter->drawText(chip_rect, Qt::AlignCenter, chip_text);
-
             chip_x += chip_w + kChipSpacing;
-        }
+            return true;
+        };
 
-        // "+N" 提示
+        painter->setFont(chip_font);
+        draw_chip(vault_item_type_label(entry.type), false);
+
+        const size_t max_show = 3;
+        const size_t show_count = std::min(entry.tags.size(), max_show);
+        for (size_t i = 0; i < show_count; ++i) {
+            if (!draw_chip(QString::fromStdString(entry.tags[i].name), false)) break;
+        }
         if (entry.tags.size() > max_show) {
             const int more = static_cast<int>(entry.tags.size() - max_show);
-            const QString more_text = QStringLiteral("+%1").arg(more);
-            const int more_w = chip_fm.horizontalAdvance(more_text) + kChipPadH * 2;
-            const QRect more_rect(chip_x, chip_y, more_w, chip_height);
-            painter->setPen(pal.chip_more_fg);
-            painter->drawText(more_rect, Qt::AlignCenter, more_text);
+            draw_chip(QStringLiteral("+%1").arg(more), true);
         }
     }
 
@@ -267,4 +265,4 @@ void PasswordBookDelegate::clear_pixmap_cache() {
     pixmap_cache_.clear();
 }
 
-}  // namespace pwdvault::ui
+}  // namespace yuli::vault::ui
